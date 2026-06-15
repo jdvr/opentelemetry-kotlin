@@ -20,6 +20,14 @@ public fun SamplerConfigDsl.alwaysOn(): Sampler = AlwaysOnSampler()
 public fun SamplerConfigDsl.alwaysOff(): Sampler = AlwaysOffSampler()
 
 /**
+ * Configures sampling so that every span reaches the SpanProcessor, converting DROP to RECORD_ONLY.
+ *
+ * https://opentelemetry.io/docs/specs/otel/trace/sdk/#alwaysrecord
+ */
+@ExperimentalApi
+public fun SamplerConfigDsl.alwaysRecord(root: Sampler): Sampler = AlwaysRecordSampler(root)
+
+/**
  * Configures sampling based on the parent span's sampling decision.
  *
  * https://opentelemetry.io/docs/specs/otel/trace/sdk/#parentbased

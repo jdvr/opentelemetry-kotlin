@@ -2,6 +2,8 @@ package io.opentelemetry.kotlin.tracing.sampling
 
 import io.opentelemetry.kotlin.ExperimentalApi
 import io.opentelemetry.kotlin.InstrumentationScopeInfoImpl
+import io.opentelemetry.kotlin.attributes.AttributeContainer
+import io.opentelemetry.kotlin.attributes.AttributesModel
 import io.opentelemetry.kotlin.clock.FakeClock
 import io.opentelemetry.kotlin.context.Context
 import io.opentelemetry.kotlin.export.MutableShutdownState
@@ -14,10 +16,13 @@ import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.init.SamplerConfigDsl
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.NonRecordingSpan
+import io.opentelemetry.kotlin.tracing.SpanKind
 import io.opentelemetry.kotlin.tracing.TraceFlagsImpl
 import io.opentelemetry.kotlin.tracing.TracerImpl
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import io.opentelemetry.kotlin.tracing.fakeSpanLimitsConfig
+import io.opentelemetry.kotlin.tracing.model.SpanLink
+import io.opentelemetry.kotlin.tracing.sampling.SamplingResult.Decision
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -132,5 +137,46 @@ internal class BuiltInSamplersTest {
         val span = tracer.startSpan("child", parentContext = contextWithParent(sampled = false, isRemote = false))
         assertFalse(span.isRecording())
         assertFalse(span.spanContext.traceFlags.isSampled)
+    }
+
+    @Test
+    fun testAlwaysRecordConvertsDropToRecordOnly() {
+        val span = buildTracer(samplerDsl.alwaysRecord(samplerDsl.alwaysOff())).startSpan("span")
+        assertTrue(span.isRecording())
+        assertFalse(span.spanContext.traceFlags.isSampled)
+    }
+
+    @Test
+    fun testAlwaysRecordPassesThroughRecordAndSample() {
+        val span = buildTracer(samplerDsl.alwaysRecord(samplerDsl.alwaysOn())).startSpan("span")
+        assertTrue(span.isRecording())
+        assertTrue(span.spanContext.traceFlags.isSampled)
+    }
+
+    @Test
+    fun testAlwaysRecordPassesThroughRecordOnly() {
+        val recordOnlySampler = object : Sampler {
+            override val description = "RecordOnly"
+            override fun shouldSample(
+                context: Context,
+                traceId: String,
+                name: String,
+                spanKind: SpanKind,
+                attributes: AttributeContainer,
+                links: List<SpanLink>,
+            ): SamplingResult {
+                val traceState = context.extractSpan().spanContext.traceState
+                return SamplingResultImpl(Decision.RECORD_ONLY, AttributesModel(), traceState)
+            }
+        }
+        val span = buildTracer(samplerDsl.alwaysRecord(recordOnlySampler)).startSpan("span")
+        assertTrue(span.isRecording())
+        assertFalse(span.spanContext.traceFlags.isSampled)
+    }
+
+    @Test
+    fun testAlwaysRecordDescription() {
+        val sampler = samplerDsl.alwaysRecord(samplerDsl.alwaysOff())
+        assertEquals("AlwaysRecord{AlwaysOffSampler}", sampler.description)
     }
 }

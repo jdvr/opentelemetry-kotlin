@@ -109,7 +109,7 @@ public class B3Propagator(
         val sampled = parts.getOrNull(2)
         val debug = sampled == "d"
         val traceFlags = if (debug || isSampledValue(sampled)) traceFlagsFactory.fromHex("01")
-        else traceFlagsFactory.default
+        else traceFlagsFactory.fromHex("00")
         val spanContext = spanContextFactory.create(
             traceId = traceId,
             spanId = rawSpanId,
@@ -137,7 +137,7 @@ public class B3Propagator(
         val debug = getter.get(carrier, DEBUG_HEADER) == "1"
         val sampled = getter.get(carrier, SAMPLED_HEADER)
         val traceFlags = if (debug || isSampledValue(sampled)) traceFlagsFactory.fromHex("01")
-        else traceFlagsFactory.default
+        else traceFlagsFactory.fromHex("00")
         val spanContext = spanContextFactory.create(
             traceId = traceId,
             spanId = rawSpanId!!,

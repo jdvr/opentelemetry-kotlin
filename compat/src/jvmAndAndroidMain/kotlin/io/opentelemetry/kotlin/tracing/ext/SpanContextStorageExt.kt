@@ -13,6 +13,9 @@ import io.opentelemetry.kotlin.tracing.model.SpanAdapter
  */
 public fun Span.storeInContext(context: Context): Context {
     val otelJavaCtx = (context as? ContextAdapter)?.impl ?: OtelJavaContext.root()
-    val otelJavaSpan = this as? SpanAdapter ?: OtelJavaSpan.getInvalid()
+    val otelJavaSpan = when (this) {
+        is SpanAdapter -> this
+        else -> OtelJavaSpan.wrap(spanContext.toOtelJavaSpanContext())
+    }
     return ContextAdapter(otelJavaCtx.with(otelJavaSpan))
 }

@@ -24,8 +24,10 @@ internal class B3PropagatorTest {
     private val spanFactory = SpanFactoryImpl(spanContextFactory)
     private val contextFactory = ContextFactoryImpl(spanFactory)
 
-    private val singlePropagator = B3Propagator(B3Format.SINGLE, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory)
-    private val multiPropagator = B3Propagator(B3Format.MULTI, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory)
+    private val singlePropagator =
+        B3Propagator(B3Format.SINGLE, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory)
+    private val multiPropagator =
+        B3Propagator(B3Format.MULTI, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory)
 
     private val traceId = "0af7651916cd43dd8448eb211c80319c"
     private val spanId = "b7ad6b7169203331"
@@ -179,7 +181,7 @@ internal class B3PropagatorTest {
     }
 
     @Test
-    fun `extract single ignores parentSpanId (4 parts)`() {
+    fun `extract single ignores parent span id when 4 parts present`() {
         val ctx = singlePropagator.extract(contextFactory.root(), mapOf("b3" to "$traceId-$spanId-1-$spanId"), MapTextMapGetter)
         assertTrue(ctx.extractSpan().spanContext.isValid)
         assertEquals(spanId, ctx.extractSpan().spanContext.spanId)
@@ -332,14 +334,14 @@ internal class B3PropagatorTest {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private fun injectSingle(traceId: String, spanId: String, sampled: Boolean): MutableMap<String, String> {
-        val flags = if (sampled) traceFlagsFactory.fromHex("01") else traceFlagsFactory.fromHex("00")
+        val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
         val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))
         return mutableMapOf<String, String>().also { singlePropagator.inject(ctx, it, MapTextMapSetter) }
     }
 
     private fun injectMulti(traceId: String, spanId: String, sampled: Boolean): MutableMap<String, String> {
-        val flags = if (sampled) traceFlagsFactory.fromHex("01") else traceFlagsFactory.fromHex("00")
+        val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
         val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))
         return mutableMapOf<String, String>().also { multiPropagator.inject(ctx, it, MapTextMapSetter) }

@@ -36,7 +36,7 @@ public class B3Propagator(
 
     override fun <T> inject(context: Context, carrier: T, setter: TextMapSetter<T>) {
         val spanContext = context.extractSpan().spanContext
-        if (!spanContext.isValid) return
+        if (!spanContext.isValid) { return }
         val debug = context.isB3Debug()
         when (format) {
             B3Format.SINGLE -> injectSingle(spanContext, debug, carrier, setter)
@@ -84,7 +84,8 @@ public class B3Propagator(
             setter.set(carrier, DEBUG_HEADER, "1")
             setter.set(carrier, SAMPLED_HEADER, "1")
         } else {
-            setter.set(carrier, SAMPLED_HEADER, if (spanContext.traceFlags.isSampled) "1" else "0")
+            val sampledValue = if (spanContext.traceFlags.isSampled) { "1" } else { "0" }
+            setter.set(carrier, SAMPLED_HEADER, sampledValue)
         }
     }
 
@@ -108,8 +109,11 @@ public class B3Propagator(
         }
         val sampled = parts.getOrNull(2)
         val debug = sampled == "d"
-        val traceFlags = if (debug || isSampledValue(sampled)) traceFlagsFactory.fromHex("01")
-        else traceFlagsFactory.fromHex("00")
+        val traceFlags = if (debug || isSampledValue(sampled)) {
+            traceFlagsFactory.fromHex("01")
+        } else {
+            traceFlagsFactory.fromHex("00")
+        }
         val spanContext = spanContextFactory.create(
             traceId = traceId,
             spanId = rawSpanId,
@@ -117,9 +121,9 @@ public class B3Propagator(
             traceState = traceStateFactory.default,
             isRemote = true,
         )
-        if (!spanContext.isValid) return null
+        if (!spanContext.isValid) { return null }
         var ctx = context.storeSpan(spanFactory.fromSpanContext(spanContext))
-        if (debug) ctx = ctx.withB3Debug()
+        if (debug) { ctx = ctx.withB3Debug() }
         return ctx
     }
 
@@ -127,17 +131,20 @@ public class B3Propagator(
         val rawTraceId = getter.get(carrier, TRACE_ID_HEADER)
         val rawSpanId = getter.get(carrier, SPAN_ID_HEADER)
         val traceId = normalizeTraceId(rawTraceId) ?: run {
-            if (rawTraceId != null) platformLog("B3 invalid traceId in multi header: $rawTraceId")
+            if (rawTraceId != null) { platformLog("B3 invalid traceId in multi header: $rawTraceId") }
             return null
         }
         if (!isValidSpanId(rawSpanId)) {
-            if (rawSpanId != null) platformLog("B3 invalid spanId in multi header: $rawSpanId")
+            if (rawSpanId != null) { platformLog("B3 invalid spanId in multi header: $rawSpanId") }
             return null
         }
         val debug = getter.get(carrier, DEBUG_HEADER) == "1"
         val sampled = getter.get(carrier, SAMPLED_HEADER)
-        val traceFlags = if (debug || isSampledValue(sampled)) traceFlagsFactory.fromHex("01")
-        else traceFlagsFactory.fromHex("00")
+        val traceFlags = if (debug || isSampledValue(sampled)) {
+            traceFlagsFactory.fromHex("01")
+        } else {
+            traceFlagsFactory.fromHex("00")
+        }
         val spanContext = spanContextFactory.create(
             traceId = traceId,
             spanId = rawSpanId!!,
@@ -145,16 +152,16 @@ public class B3Propagator(
             traceState = traceStateFactory.default,
             isRemote = true,
         )
-        if (!spanContext.isValid) return null
+        if (!spanContext.isValid) { return null }
         var ctx = context.storeSpan(spanFactory.fromSpanContext(spanContext))
-        if (debug) ctx = ctx.withB3Debug()
+        if (debug) { ctx = ctx.withB3Debug() }
         return ctx
     }
 
     // ── validation helpers ────────────────────────────────────────────────────
 
     private fun normalizeTraceId(raw: String?): String? {
-        if (raw == null) return null
+        if (raw == null) { return null }
         return when (raw.length) {
             TRACE_ID_LENGTH -> raw.takeIf { it.isValidHex() && !it.isAllZeros() }
             TRACE_ID_LENGTH / 2 -> raw.padStart(TRACE_ID_LENGTH, '0')

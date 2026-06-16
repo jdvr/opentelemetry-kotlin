@@ -21,7 +21,7 @@ import io.opentelemetry.kotlin.tracing.SpanContext
  * https://github.com/openzipkin/b3-propagation
  */
 @OptIn(ExperimentalApi::class)
-internal class B3Propagator(
+public class B3Propagator(
     private val format: B3Format,
     private val traceFlagsFactory: TraceFlagsFactory,
     private val traceStateFactory: TraceStateFactory,
@@ -179,7 +179,7 @@ internal class B3Propagator(
     private fun Context.withB3Debug(): Context = set(DEBUG_CONTEXT_KEY, true)
     private fun Context.isB3Debug(): Boolean = get(DEBUG_CONTEXT_KEY) == true
 
-    companion object {
+    public companion object {
         internal val DEBUG_CONTEXT_KEY: ContextKey<Boolean> = ContextKeyImpl("b3-debug")
 
         private const val TRACE_ID_HEADER = "X-B3-TraceId"

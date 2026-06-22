@@ -21,7 +21,7 @@ import io.opentelemetry.kotlin.tracing.SpanContext
  * https://github.com/openzipkin/b3-propagation
  */
 @OptIn(ExperimentalApi::class)
-public class B3Propagator(
+internal class B3Propagator(
     private val format: B3Format,
     private val traceFlagsFactory: TraceFlagsFactory,
     private val traceStateFactory: TraceStateFactory,
@@ -48,8 +48,6 @@ public class B3Propagator(
         extractSingle(context, carrier, getter)
             ?: extractMulti(context, carrier, getter)
             ?: context
-
-    // ── inject helpers ────────────────────────────────────────────────────────
 
     private fun <T> injectSingle(
         spanContext: SpanContext,
@@ -89,12 +87,10 @@ public class B3Propagator(
         }
     }
 
-    // ── extract helpers ───────────────────────────────────────────────────────
-
     private fun <T> extractSingle(context: Context, carrier: T, getter: TextMapGetter<T>): Context? {
         val header = getter.get(carrier, COMBINED_HEADER) ?: return null
         val parts = header.split(DELIMITER)
-        if (parts.size < 2 || parts.size > 4) {
+        if (parts.size !in 2..4) {
             platformLog("B3 single header has wrong number of parts: $header")
             return null
         }
@@ -122,9 +118,13 @@ public class B3Propagator(
             isRemote = true,
         )
         if (!spanContext.isValid) { return null }
-        var ctx = context.storeSpan(spanFactory.fromSpanContext(spanContext))
-        if (debug) { ctx = ctx.withB3Debug() }
-        return ctx
+        return context.storeSpan(spanFactory.fromSpanContext(spanContext)).let {
+            if (debug) {
+                it.withB3Debug()
+            } else {
+                it
+            }
+        }
     }
 
     private fun <T> extractMulti(context: Context, carrier: T, getter: TextMapGetter<T>): Context? {
@@ -153,12 +153,14 @@ public class B3Propagator(
             isRemote = true,
         )
         if (!spanContext.isValid) { return null }
-        var ctx = context.storeSpan(spanFactory.fromSpanContext(spanContext))
-        if (debug) { ctx = ctx.withB3Debug() }
-        return ctx
+        return context.storeSpan(spanFactory.fromSpanContext(spanContext)).let {
+            if (debug) {
+                it.withB3Debug()
+            } else {
+                it
+            }
+        }
     }
-
-    // ── validation helpers ────────────────────────────────────────────────────
 
     private fun normalizeTraceId(raw: String?): String? {
         if (raw == null) { return null }
@@ -177,16 +179,14 @@ public class B3Propagator(
         value == "1" || value?.lowercase() == "true"
 
     private fun String.isValidHex(): Boolean =
-        all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+        all { it in '0'..'9' || it.lowercaseChar() in 'a'..'f' }
 
     private fun String.isAllZeros(): Boolean = all { it == '0' }
-
-    // ── context debug helpers ─────────────────────────────────────────────────
 
     private fun Context.withB3Debug(): Context = set(DEBUG_CONTEXT_KEY, true)
     private fun Context.isB3Debug(): Boolean = get(DEBUG_CONTEXT_KEY) == true
 
-    public companion object {
+    companion object {
         internal val DEBUG_CONTEXT_KEY: ContextKey<Boolean> = ContextKeyImpl("b3-debug")
 
         private const val TRACE_ID_HEADER = "X-B3-TraceId"

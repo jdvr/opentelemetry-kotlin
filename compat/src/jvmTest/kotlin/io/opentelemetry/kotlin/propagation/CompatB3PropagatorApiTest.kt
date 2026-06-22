@@ -69,7 +69,7 @@ internal class CompatB3PropagatorApiTest {
     }
 
     @Test
-    fun `b3 returns a B3Propagator instance`() {
-        assertTrue(dsl.b3(B3Format.SINGLE) is B3Propagator)
+    fun `b3 returns an adapter wrapping the Java B3Propagator`() {
+        assertTrue(dsl.b3(B3Format.SINGLE) is TextMapPropagatorAdapter)
     }
 }

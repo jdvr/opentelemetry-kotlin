@@ -32,8 +32,6 @@ internal class B3PropagatorTest {
     private val traceId = "0af7651916cd43dd8448eb211c80319c"
     private val spanId = "b7ad6b7169203331"
 
-    // ── fields ───────────────────────────────────────────────────────────────
-
     @Test
     fun `single format fields returns only b3`() {
         assertEquals(listOf("b3"), singlePropagator.fields().toList())

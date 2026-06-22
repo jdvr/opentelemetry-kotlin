@@ -50,15 +50,9 @@ internal class B3PropagatorTest {
     }
 
     @Test
-    fun `inject single writes sampled flag 1 when sampled`() {
-        val carrier = injectSingle(traceId, spanId, sampled = true)
-        assertEquals("$traceId-$spanId-1", carrier["b3"])
-    }
-
-    @Test
-    fun `inject single writes sampled flag 0 when not sampled`() {
-        val carrier = injectSingle(traceId, spanId, sampled = false)
-        assertEquals("$traceId-$spanId-0", carrier["b3"])
+    fun `inject single writes correct sampled flag`() {
+        assertEquals("$traceId-$spanId-1", injectSingle(sampled = true)["b3"])
+        assertEquals("$traceId-$spanId-0", injectSingle(sampled = false)["b3"])
     }
 
     @Test
@@ -80,19 +74,16 @@ internal class B3PropagatorTest {
     }
 
     @Test
-    fun `inject multi writes three headers when sampled`() {
-        val carrier = injectMulti(traceId, spanId, sampled = true)
-        assertEquals(traceId, carrier["X-B3-TraceId"])
-        assertEquals(spanId, carrier["X-B3-SpanId"])
-        assertEquals("1", carrier["X-B3-Sampled"])
-        assertNull(carrier["X-B3-Flags"])
-    }
+    fun `inject multi writes correct sampled header`() {
+        val sampledCarrier = injectMulti(sampled = true)
+        assertEquals(traceId, sampledCarrier["X-B3-TraceId"])
+        assertEquals(spanId, sampledCarrier["X-B3-SpanId"])
+        assertEquals("1", sampledCarrier["X-B3-Sampled"])
+        assertNull(sampledCarrier["X-B3-Flags"])
 
-    @Test
-    fun `inject multi writes sampled 0 when not sampled`() {
-        val carrier = injectMulti(traceId, spanId, sampled = false)
-        assertEquals("0", carrier["X-B3-Sampled"])
-        assertNull(carrier["X-B3-Flags"])
+        val unsampledCarrier = injectMulti(sampled = false)
+        assertEquals("0", unsampledCarrier["X-B3-Sampled"])
+        assertNull(unsampledCarrier["X-B3-Flags"])
     }
 
     @Test
@@ -107,8 +98,6 @@ internal class B3PropagatorTest {
         assertEquals("1", carrier["X-B3-Sampled"])
     }
 
-    // ── extract single ───────────────────────────────────────────────────────
-
     @Test
     fun `extract single returns original context when b3 header absent`() {
         val ctx = contextFactory.root()
@@ -116,18 +105,14 @@ internal class B3PropagatorTest {
     }
 
     @Test
-    fun `extract single parses sampled trace`() {
-        val ctx = singlePropagator.extract(contextFactory.root(), mapOf("b3" to "$traceId-$spanId-1"), MapTextMapGetter)
-        val sc = ctx.extractSpan().spanContext
-        assertEquals(traceId, sc.traceId)
-        assertEquals(spanId, sc.spanId)
-        assertTrue(sc.traceFlags.isSampled)
-    }
+    fun `extract single parses sampled flag`() {
+        val sampled = singlePropagator.extract(contextFactory.root(), mapOf("b3" to "$traceId-$spanId-1"), MapTextMapGetter)
+        assertEquals(traceId, sampled.extractSpan().spanContext.traceId)
+        assertEquals(spanId, sampled.extractSpan().spanContext.spanId)
+        assertTrue(sampled.extractSpan().spanContext.traceFlags.isSampled)
 
-    @Test
-    fun `extract single parses not-sampled trace`() {
-        val ctx = singlePropagator.extract(contextFactory.root(), mapOf("b3" to "$traceId-$spanId-0"), MapTextMapGetter)
-        assertFalse(ctx.extractSpan().spanContext.traceFlags.isSampled)
+        val unsampled = singlePropagator.extract(contextFactory.root(), mapOf("b3" to "$traceId-$spanId-0"), MapTextMapGetter)
+        assertFalse(unsampled.extractSpan().spanContext.traceFlags.isSampled)
     }
 
     @Test
@@ -181,8 +166,6 @@ internal class B3PropagatorTest {
         assertEquals(spanId, ctx.extractSpan().spanContext.spanId)
     }
 
-    // ── extract multi ────────────────────────────────────────────────────────
-
     @Test
     fun `extract multi returns original context when traceId absent`() {
         val ctx = contextFactory.root()
@@ -196,20 +179,22 @@ internal class B3PropagatorTest {
     }
 
     @Test
-    fun `extract multi parses sampled trace`() {
-        val carrier = mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to spanId, "X-B3-Sampled" to "1")
-        val ctx = multiPropagator.extract(contextFactory.root(), carrier, MapTextMapGetter)
-        val sc = ctx.extractSpan().spanContext
-        assertEquals(traceId, sc.traceId)
-        assertEquals(spanId, sc.spanId)
-        assertTrue(sc.traceFlags.isSampled)
-    }
+    fun `extract multi parses sampled flag`() {
+        val sampled = multiPropagator.extract(
+            contextFactory.root(),
+            mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to spanId, "X-B3-Sampled" to "1"),
+            MapTextMapGetter,
+        )
+        assertEquals(traceId, sampled.extractSpan().spanContext.traceId)
+        assertEquals(spanId, sampled.extractSpan().spanContext.spanId)
+        assertTrue(sampled.extractSpan().spanContext.traceFlags.isSampled)
 
-    @Test
-    fun `extract multi parses not-sampled trace`() {
-        val carrier = mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to spanId, "X-B3-Sampled" to "0")
-        val ctx = multiPropagator.extract(contextFactory.root(), carrier, MapTextMapGetter)
-        assertFalse(ctx.extractSpan().spanContext.traceFlags.isSampled)
+        val unsampled = multiPropagator.extract(
+            contextFactory.root(),
+            mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to spanId, "X-B3-Sampled" to "0"),
+            MapTextMapGetter,
+        )
+        assertFalse(unsampled.extractSpan().spanContext.traceFlags.isSampled)
     }
 
     @Test
@@ -235,7 +220,18 @@ internal class B3PropagatorTest {
         assertEquals("0000000000000000$shortTraceId", ctx.extractSpan().spanContext.traceId)
     }
 
-    // ── extract precedence ───────────────────────────────────────────────────
+    @Test
+    fun `extract multi returns original context for all-zero spanId`() {
+        val ctx = contextFactory.root()
+        assertSame(
+            ctx,
+            multiPropagator.extract(
+                ctx,
+                mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to "0".repeat(16), "X-B3-Sampled" to "1"),
+                MapTextMapGetter,
+            )
+        )
+    }
 
     @Test
     fun `single header takes precedence over multi when both present`() {
@@ -270,28 +266,20 @@ internal class B3PropagatorTest {
         assertEquals(spanId2, ctx.extractSpan().spanContext.spanId)
     }
 
-    // ── round-trips ──────────────────────────────────────────────────────────
-
     @Test
-    fun `single inject then extract round-trips sampled span`() {
-        val carrier = injectSingle(traceId, spanId, sampled = true)
-        val ctx = singlePropagator.extract(contextFactory.root(), carrier, MapTextMapGetter)
-        val sc = ctx.extractSpan().spanContext
-        assertEquals(traceId, sc.traceId)
-        assertEquals(spanId, sc.spanId)
-        assertTrue(sc.traceFlags.isSampled)
-    }
+    fun `single inject then extract round-trips sampled flag`() {
+        val sampledCtx = singlePropagator.extract(contextFactory.root(), injectSingle(sampled = true), MapTextMapGetter)
+        assertEquals(traceId, sampledCtx.extractSpan().spanContext.traceId)
+        assertEquals(spanId, sampledCtx.extractSpan().spanContext.spanId)
+        assertTrue(sampledCtx.extractSpan().spanContext.traceFlags.isSampled)
 
-    @Test
-    fun `single inject then extract round-trips not-sampled span`() {
-        val carrier = injectSingle(traceId, spanId, sampled = false)
-        val ctx = singlePropagator.extract(contextFactory.root(), carrier, MapTextMapGetter)
-        assertFalse(ctx.extractSpan().spanContext.traceFlags.isSampled)
+        val unsampledCtx = singlePropagator.extract(contextFactory.root(), injectSingle(sampled = false), MapTextMapGetter)
+        assertFalse(unsampledCtx.extractSpan().spanContext.traceFlags.isSampled)
     }
 
     @Test
     fun `multi inject then extract round-trips sampled span`() {
-        val carrier = injectMulti(traceId, spanId, sampled = true)
+        val carrier = injectMulti(sampled = true)
         val ctx = multiPropagator.extract(contextFactory.root(), carrier, MapTextMapGetter)
         val sc = ctx.extractSpan().spanContext
         assertEquals(traceId, sc.traceId)
@@ -325,16 +313,14 @@ internal class B3PropagatorTest {
         assertTrue(outCtx.extractSpan().spanContext.traceFlags.isSampled)
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    private fun injectSingle(traceId: String, spanId: String, sampled: Boolean): MutableMap<String, String> {
+    private fun injectSingle(sampled: Boolean): MutableMap<String, String> {
         val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
         val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))
         return mutableMapOf<String, String>().also { singlePropagator.inject(ctx, it, MapTextMapSetter) }
     }
 
-    private fun injectMulti(traceId: String, spanId: String, sampled: Boolean): MutableMap<String, String> {
+    private fun injectMulti(sampled: Boolean): MutableMap<String, String> {
         val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
         val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))

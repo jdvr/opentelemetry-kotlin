@@ -15,12 +15,9 @@ kotlin {
                 api(project(":config-dsl"))
                 api(project(":config-envar"))
                 api(project(":sdk-api"))
-                implementation(project(":platform-implementations"))
-            }
-        }
-        jvmMain {
-            dependencies {
                 implementation(project(":config-yaml"))
+                implementation(project(":platform-implementations"))
+                implementation(libs.okio)
             }
         }
         commonTest {

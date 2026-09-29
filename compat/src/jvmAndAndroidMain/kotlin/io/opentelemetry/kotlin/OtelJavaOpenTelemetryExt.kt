@@ -7,6 +7,7 @@ import io.opentelemetry.kotlin.aliases.OtelJavaOpenTelemetry
 import io.opentelemetry.kotlin.aliases.OtelJavaOpenTelemetrySdk
 import io.opentelemetry.kotlin.aliases.OtelJavaTracerProvider
 import io.opentelemetry.kotlin.clock.ClockAdapter
+import io.opentelemetry.kotlin.config.CompatConfigProvider
 import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.factory.CompatBaggageFactory
 import io.opentelemetry.kotlin.factory.CompatContextFactory
@@ -51,6 +52,7 @@ public fun OtelJavaOpenTelemetry.toOtelKotlinApi(
         ),
         loggerProvider = LoggerProviderAdapter(unobfuscatedLoggerProvider()),
         meterProvider = MeterProviderAdapter(unobfuscatedMeterProvider()),
+        configProvider = CompatConfigProvider,
         clock = clock,
         spanContext = spanContext,
         traceFlags = traceFlags,

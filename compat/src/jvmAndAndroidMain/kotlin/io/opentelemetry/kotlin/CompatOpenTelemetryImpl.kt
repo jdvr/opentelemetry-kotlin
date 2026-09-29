@@ -1,5 +1,6 @@
 package io.opentelemetry.kotlin
 
+import io.opentelemetry.kotlin.config.ConfigProvider
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.export.CompositeTelemetryCloseable
 import io.opentelemetry.kotlin.export.MutableShutdownState
@@ -22,6 +23,7 @@ internal class CompatOpenTelemetryImpl(
     override val tracerProvider: TracerProvider,
     override val loggerProvider: LoggerProvider,
     override val meterProvider: MeterProvider,
+    override val configProvider: ConfigProvider,
     override val clock: Clock,
     override val spanContext: SpanContextFactory,
     override val traceFlags: TraceFlagsFactory,

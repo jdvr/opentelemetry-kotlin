@@ -27,6 +27,7 @@ kotlin {
                 implementation(project(":api-ext"))
                 implementation(project(":sdk-api"))
                 implementation(project(":config"))
+                implementation(project(":config-yaml"))
                 implementation(project(":context-impl"))
                 implementation(project(":config-dsl"))
                 implementation(project(":model"))

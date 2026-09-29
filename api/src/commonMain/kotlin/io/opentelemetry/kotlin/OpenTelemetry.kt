@@ -1,5 +1,6 @@
 package io.opentelemetry.kotlin
 
+import io.opentelemetry.kotlin.config.ConfigProvider
 import io.opentelemetry.kotlin.factory.BaggageFactory
 import io.opentelemetry.kotlin.factory.ContextFactory
 import io.opentelemetry.kotlin.factory.SpanContextFactory
@@ -37,6 +38,13 @@ public interface OpenTelemetry {
      * The [MeterProvider] for creating [Meter] instances.
      */
     public val meterProvider: MeterProvider
+
+    /**
+     * The [ConfigProvider] that instrumentation libraries read their configuration from.
+     *
+     * https://opentelemetry.io/docs/specs/otel/configuration/api/
+     */
+    public val configProvider: ConfigProvider
 
     /**
      * Factory that constructs SpanContext objects.

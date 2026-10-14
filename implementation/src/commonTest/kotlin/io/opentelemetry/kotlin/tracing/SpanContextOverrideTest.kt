@@ -6,10 +6,7 @@ import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.IdGeneratorImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import kotlin.test.BeforeTest
@@ -23,26 +20,18 @@ internal class SpanContextOverrideTest {
     private val scope = InstrumentationScopeInfoImpl("key", null, null, emptyMap())
     private lateinit var tracer: Tracer
     private lateinit var processor: FakeSpanProcessor
-    private lateinit var spanContextFactory: SpanContextFactoryImpl
-    private lateinit var traceFlagsFactory: TraceFlagsFactoryImpl
-    private lateinit var traceStateFactory: TraceStateFactoryImpl
     private lateinit var ctx: SpanContext
 
     @BeforeTest
     fun setUp() {
         processor = FakeSpanProcessor()
         val idGenerator = IdGeneratorImpl()
-        traceFlagsFactory = TraceFlagsFactoryImpl()
-        traceStateFactory = TraceStateFactoryImpl()
-        spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
-        val spanFactory = SpanFactoryImpl(spanContextFactory)
+        val spanFactory = SpanFactoryImpl()
         val contextFactory = ContextFactoryImpl(spanFactory)
         tracer = TracerImpl(
             clock = FakeClock(),
             processor = processor,
             contextFactory = contextFactory,
-            spanContextFactory = spanContextFactory,
-            traceFlagsFactory = traceFlagsFactory,
             scope = scope,
             resource = FakeResource(),
             spanLimitConfig = fakeSpanLimitsConfig,
@@ -50,13 +39,9 @@ internal class SpanContextOverrideTest {
             shutdownState = MutableShutdownState(),
             sdkErrorHandler = NoopSdkErrorHandler,
         )
-        ctx = spanContextFactory.create(
-            traceId = "0af7651916cd43dd8448eb211c80319c",
-            spanId = "b7ad6b7169203331",
-            traceFlags = traceFlagsFactory.default,
-            traceState = traceStateFactory.default,
-            isRemote = false,
-        )
+        ctx = createSpanContext("0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331") {
+            isSampled = true
+        }
     }
 
     @Test

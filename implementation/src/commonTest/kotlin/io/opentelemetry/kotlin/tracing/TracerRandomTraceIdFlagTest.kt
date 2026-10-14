@@ -7,10 +7,7 @@ import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.IdGenerator
 import io.opentelemetry.kotlin.factory.IdGeneratorImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.propagation.FakeTextMapSetter
 import io.opentelemetry.kotlin.propagation.W3CTraceContextPropagator
 import io.opentelemetry.kotlin.resource.FakeResource
@@ -32,8 +29,6 @@ import kotlin.test.assertTrue
 internal class TracerRandomTraceIdFlagTest {
 
     private val key = InstrumentationScopeInfoImpl("key", null, null, emptyMap())
-    private val traceFlagsFactory = TraceFlagsFactoryImpl()
-    private val traceStateFactory = TraceStateFactoryImpl()
 
     @Test
     fun testInterfaceDefaultIsNotRandom() {
@@ -65,15 +60,8 @@ internal class TracerRandomTraceIdFlagTest {
     @Test
     fun testRandomFlagIsPropagatedInTraceParentHeader() {
         val idGenerator = IdGeneratorImpl()
-        val spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
-        val spanFactory = SpanFactoryImpl(spanContextFactory)
-        val propagator = W3CTraceContextPropagator(
-            traceFlagsFactory = traceFlagsFactory,
-            traceStateFactory = traceStateFactory,
-            spanContextFactory = spanContextFactory,
-            spanFactory = spanFactory,
-            sdkErrorHandler = NoopSdkErrorHandler,
-        )
+        val spanFactory = SpanFactoryImpl()
+        val propagator = W3CTraceContextPropagator()
         val span = buildTracer(idGenerator).startSpan("test")
         val carrier = mutableMapOf<String, String>()
         propagator.inject(ContextFactoryImpl(spanFactory).root().storeSpan(span), carrier, FakeTextMapSetter)
@@ -84,28 +72,25 @@ internal class TracerRandomTraceIdFlagTest {
 
     @Test
     fun testChildSpanInheritsRandomFlagFromParent() {
-        val span = startChildOfRemoteParent(NonRandomIdGenerator(), parentFlags = "03")
+        val span = startChildOfRemoteParent(NonRandomIdGenerator(), parentIsRandom = true)
         assertTrue(span.spanContext.traceFlags.isRandom)
         assertEquals("03", span.spanContext.traceFlags.hex)
     }
 
     @Test
     fun testChildSpanInheritsAbsentRandomFlagFromParent() {
-        val span = startChildOfRemoteParent(IdGeneratorImpl(), parentFlags = "01")
+        val span = startChildOfRemoteParent(IdGeneratorImpl(), parentIsRandom = false)
         assertFalse(span.spanContext.traceFlags.isRandom)
         assertEquals("01", span.spanContext.traceFlags.hex)
     }
 
-    private fun startChildOfRemoteParent(idGenerator: IdGenerator, parentFlags: String): Span {
-        val spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
-        val spanFactory = SpanFactoryImpl(spanContextFactory)
-        val parent = spanContextFactory.create(
-            traceId = "12345678901234567890123456789012",
-            spanId = "1234567890123456",
-            traceFlags = traceFlagsFactory.fromHex(parentFlags),
-            traceState = traceStateFactory.default,
-            isRemote = true,
-        )
+    private fun startChildOfRemoteParent(idGenerator: IdGenerator, parentIsRandom: Boolean): Span {
+        val spanFactory = SpanFactoryImpl()
+        val parent = createSpanContext("12345678901234567890123456789012", "1234567890123456") {
+            isSampled = true
+            isRandom = parentIsRandom
+            isRemote = true
+        }
         val parentContext = ContextFactoryImpl(spanFactory).root().storeSpan(spanFactory.fromSpanContext(parent))
         return buildTracer(idGenerator).startSpan("test", parentContext = parentContext)
     }
@@ -114,13 +99,10 @@ internal class TracerRandomTraceIdFlagTest {
         idGenerator: IdGenerator,
         sampler: Sampler = AlwaysOnSampler,
     ): TracerImpl {
-        val spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
         return TracerImpl(
             clock = FakeClock(),
             processor = FakeSpanProcessor(),
-            contextFactory = ContextFactoryImpl(SpanFactoryImpl(spanContextFactory)),
-            spanContextFactory = spanContextFactory,
-            traceFlagsFactory = traceFlagsFactory,
+            contextFactory = ContextFactoryImpl(SpanFactoryImpl()),
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = fakeSpanLimitsConfig,

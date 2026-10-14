@@ -2,12 +2,11 @@ package io.opentelemetry.kotlin.init
 
 import io.opentelemetry.kotlin.attributes.AttributesModel
 import io.opentelemetry.kotlin.clock.FakeClock
-import io.opentelemetry.kotlin.config.envar.EnvVarReader
+import io.opentelemetry.kotlin.config.envar.reader.EnvVarReader
 import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.error.SdkErrorSeverity
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
 import io.opentelemetry.kotlin.init.config.TracingConfig
 import io.opentelemetry.kotlin.tracing.SpanKind
@@ -15,7 +14,6 @@ import io.opentelemetry.kotlin.tracing.sampling.FakeSampler
 import io.opentelemetry.kotlin.tracing.sampling.ParentBasedSampler
 import io.opentelemetry.kotlin.tracing.sampling.Sampler
 import io.opentelemetry.kotlin.tracing.sampling.SamplingResult.Decision
-import io.opentelemetry.kotlin.tracing.sampling.alwaysOn
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -26,8 +24,7 @@ import kotlin.test.assertSame
 internal class ResolvedSamplerConfigTest {
 
     private val clock = FakeClock()
-    private val spanContextFactory = SpanContextFactoryImpl()
-    private val spanFactory = SpanFactoryImpl(spanContextFactory)
+    private val spanFactory = SpanFactoryImpl()
     private val contextFactory = ContextFactoryImpl(spanFactory)
 
     private fun tracingConfig(
@@ -44,7 +41,7 @@ internal class ResolvedSamplerConfigTest {
         val behavior = defaultBehaviorReader(
             envVarReader = EnvVarReader(getEnvVar),
             sdkErrorHandler = cfg.sdkErrorHandler,
-        ).read(cfg.configFilePath, cfg.toBehavior())
+        ).read(cfg.configFilePath, cfg::toBehavior)
         return SdkConfigFactory(cfg, behavior).generateTracingConfig()
     }
 
@@ -52,7 +49,7 @@ internal class ResolvedSamplerConfigTest {
         getEnvVar: (String) -> String? = { null },
         errorHandler: SdkErrorHandler? = null,
         configure: TracerProviderConfigDsl.() -> Unit = {},
-    ) = tracingConfig(getEnvVar, errorHandler, configure).samplerFactory(spanFactory)
+    ) = tracingConfig(getEnvVar, errorHandler, configure).samplerFactory()
 
     private fun env(sampler: String): (String) -> String? {
         val values = buildMap {

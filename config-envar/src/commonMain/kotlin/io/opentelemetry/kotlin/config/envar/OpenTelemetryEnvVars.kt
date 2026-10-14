@@ -3,9 +3,12 @@ package io.opentelemetry.kotlin.config.envar
 import io.opentelemetry.kotlin.ExperimentalApi
 import io.opentelemetry.kotlin.behavior.LoggerProviderBehavior
 import io.opentelemetry.kotlin.behavior.OpenTelemetryBehavior
+import io.opentelemetry.kotlin.behavior.SpanProcessorBehavior
 import io.opentelemetry.kotlin.behavior.TracerProviderBehavior
 import io.opentelemetry.kotlin.config.envar.logging.LogLimitsEnvVars
 import io.opentelemetry.kotlin.config.envar.logging.LogsExporterEnvVars
+import io.opentelemetry.kotlin.config.envar.reader.ReportingEnvVarReader
+import io.opentelemetry.kotlin.config.envar.tracing.BatchSpanProcessorEnvVars
 import io.opentelemetry.kotlin.config.envar.tracing.SamplerEnvVars
 import io.opentelemetry.kotlin.config.envar.tracing.SpanLimitsEnvVars
 import io.opentelemetry.kotlin.config.envar.tracing.TracesExporterEnvVars
@@ -17,20 +20,28 @@ import io.opentelemetry.kotlin.config.envar.tracing.TracesExporterEnvVars
  */
 @ExperimentalApi
 class OpenTelemetryEnvVars(
-    private val reader: EnvVarReader,
-    private val onWarning: (String) -> Unit = {},
+    private val reader: ReportingEnvVarReader,
 ) {
 
     fun toBehavior(): OpenTelemetryBehavior = OpenTelemetryBehavior(
+        resource = ResourceEnvVars(reader).toBehavior(),
         attributeLimits = AttributeLimitsEnvVars(reader).toBehavior(),
         tracerProvider = TracerProviderBehavior(
             spanLimits = SpanLimitsEnvVars(reader).toBehavior(),
-            sampler = SamplerEnvVars(reader, onWarning).toBehavior(),
-            processor = TracesExporterEnvVars(reader).toBehavior(),
+            sampler = SamplerEnvVars(reader).toBehavior(),
+            processor = TracesExporterEnvVars(reader).toBehavior()?.let {
+                it.mergeWith(SpanProcessorBehavior(batch = BatchSpanProcessorEnvVars(reader).toBehavior()))
+            },
         ),
         loggerProvider = LoggerProviderBehavior(
             logLimits = LogLimitsEnvVars(reader).toBehavior(),
             processor = LogsExporterEnvVars(reader).toBehavior(),
         ),
     )
+
+    internal companion object {
+        const val OTLP_ENDPOINT = "OTEL_EXPORTER_OTLP_ENDPOINT"
+        const val OTLP_TIMEOUT = "OTEL_EXPORTER_OTLP_TIMEOUT"
+        const val OTLP_HEADERS = "OTEL_EXPORTER_OTLP_HEADERS"
+    }
 }

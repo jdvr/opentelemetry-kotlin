@@ -7,15 +7,12 @@ import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.ContextFactory
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
-import io.opentelemetry.kotlin.factory.SpanContextFactory
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactory
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.logging.export.FakeLogRecordProcessor
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.TracerImpl
+import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import io.opentelemetry.kotlin.tracing.fakeLogLimitsConfig
 import io.opentelemetry.kotlin.tracing.fakeSpanLimitsConfig
@@ -32,23 +29,18 @@ internal class LogContextTest {
     private lateinit var clock: FakeClock
     private lateinit var processor: FakeLogRecordProcessor
     private lateinit var contextFactory: ContextFactory
-    private lateinit var spanContextFactory: SpanContextFactory
     private lateinit var spanFactory: SpanFactory
 
     @BeforeTest
     fun setUp() {
         clock = FakeClock()
         processor = FakeLogRecordProcessor()
-        val traceFlags = TraceFlagsFactoryImpl()
-        val traceState = TraceStateFactoryImpl()
-        spanContextFactory = SpanContextFactoryImpl(traceFlags, traceState)
-        spanFactory = SpanFactoryImpl(spanContextFactory)
+        spanFactory = SpanFactoryImpl()
         contextFactory = ContextFactoryImpl(spanFactory)
         logger = LoggerImpl(
             clock,
             processor,
             contextFactory,
-            spanContextFactory,
             key,
             FakeResource(),
             fakeLogLimitsConfig,
@@ -59,8 +51,6 @@ internal class LogContextTest {
             clock = clock,
             processor = FakeSpanProcessor(),
             contextFactory = contextFactory,
-            spanContextFactory = spanContextFactory,
-            traceFlagsFactory = traceFlags,
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = fakeSpanLimitsConfig,
@@ -74,8 +64,7 @@ internal class LogContextTest {
     fun testDefaultContext() {
         logger.emit()
         val log = processor.logs.single()
-        val root = contextFactory.root().extractSpan().spanContext
-        assertSame(root, log.spanContext)
+        assertSame(createInvalidSpanContext(), log.spanContext)
     }
 
     @Test
@@ -102,6 +91,6 @@ internal class LogContextTest {
 
         assertEquals(2, processor.logs.size)
         assertSame(span.spanContext, processor.logs[0].spanContext)
-        assertSame(spanContextFactory.invalid, processor.logs[1].spanContext)
+        assertSame(createInvalidSpanContext(), processor.logs[1].spanContext)
     }
 }

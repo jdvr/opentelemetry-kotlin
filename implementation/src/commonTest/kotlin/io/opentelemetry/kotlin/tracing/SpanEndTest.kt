@@ -6,8 +6,6 @@ import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
-import io.opentelemetry.kotlin.factory.FakeTraceFlagsFactory
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import kotlin.test.BeforeTest
@@ -33,8 +31,6 @@ internal class SpanEndTest {
             clock = clock,
             processor = processor,
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
-            traceFlagsFactory = FakeTraceFlagsFactory(),
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = fakeSpanLimitsConfig,
@@ -58,6 +54,24 @@ internal class SpanEndTest {
         clock.time = timestamp
         val span = tracer.startSpan("test")
         span.end()
+        assertSpanTimestamp(timestamp)
+    }
+
+    @Test
+    fun testSpanEndWithZeroTimestampUsesClock() {
+        val timestamp = 50L
+        clock.time = timestamp
+        val span = tracer.startSpan("test")
+        span.end(0)
+        assertSpanTimestamp(timestamp)
+    }
+
+    @Test
+    fun testSpanEndWithNegativeTimestampUsesClock() {
+        val timestamp = 50L
+        clock.time = timestamp
+        val span = tracer.startSpan("test")
+        span.end(-1)
         assertSpanTimestamp(timestamp)
     }
 

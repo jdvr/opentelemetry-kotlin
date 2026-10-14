@@ -5,16 +5,14 @@ import io.opentelemetry.kotlin.attributes.AttributeContainer
 import io.opentelemetry.kotlin.attributes.AttributesModel
 import io.opentelemetry.kotlin.context.Context
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.factory.hexToByteArray
-import io.opentelemetry.kotlin.init.SamplerConfigDsl
+import io.opentelemetry.kotlin.init.SamplerConfigImpl
 import io.opentelemetry.kotlin.tracing.NonRecordingSpan
 import io.opentelemetry.kotlin.tracing.SpanKind
 import io.opentelemetry.kotlin.tracing.SpanLinkImpl
-import io.opentelemetry.kotlin.tracing.TraceFlagsImpl
+import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
+import io.opentelemetry.kotlin.tracing.createSpanContext
 import io.opentelemetry.kotlin.tracing.model.SpanLink
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,15 +24,10 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalApi::class)
 internal class ComposableRuleBasedSamplerTest {
 
-    private val traceFlagsFactory = TraceFlagsFactoryImpl()
-    private val traceStateFactory = TraceStateFactoryImpl()
-    private val spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
-    private val spanFactory = SpanFactoryImpl(spanContextFactory)
+    private val spanFactory = SpanFactoryImpl()
     private val contextFactory = ContextFactoryImpl(spanFactory)
 
-    private val samplerDsl = object : SamplerConfigDsl {
-        override val spanFactory = this@ComposableRuleBasedSamplerTest.spanFactory
-    }
+    private val samplerDsl = SamplerConfigImpl()
 
     private val traceId = "000000000000000000ffffffffffffff"
 
@@ -161,7 +154,7 @@ internal class ComposableRuleBasedSamplerTest {
 
         val context = contextWithParent(sampled = true, isRemote = true)
         val attributes = AttributesModel().apply { setStringAttribute("http.route", "/checkout") }
-        val links = listOf(SpanLinkImpl(spanContextFactory.invalid, AttributesModel()))
+        val links = listOf(SpanLinkImpl(createInvalidSpanContext(), AttributesModel()))
         sampler.intentFor(
             context = context,
             name = "checkout",
@@ -245,20 +238,14 @@ internal class ComposableRuleBasedSamplerTest {
     }
 
     private fun contextWithParent(sampled: Boolean, isRemote: Boolean, otValue: String? = null): Context {
-        val traceFlags = if (sampled) {
-            traceFlagsFactory.default
-        } else {
-            TraceFlagsImpl(isSampled = false, isRandom = false)
+        val parentSpanContext = createSpanContext("12345678901234567890123456789012", "1234567890123456") {
+            isSampled = sampled
+            this.isRemote = isRemote
+            if (otValue != null) {
+                traceState { put("ot", otValue) }
+            }
         }
-        val traceState = otValue?.let { traceStateFactory.default.put("ot", it) } ?: traceStateFactory.default
-        val parentSpanContext = spanContextFactory.create(
-            traceId = "12345678901234567890123456789012",
-            spanId = "1234567890123456",
-            traceFlags = traceFlags,
-            traceState = traceState,
-            isRemote = isRemote,
-        )
-        val parentSpan = NonRecordingSpan(spanContextFactory.invalid, parentSpanContext)
+        val parentSpan = NonRecordingSpan(createInvalidSpanContext(), parentSpanContext)
         return contextFactory.root().storeSpan(parentSpan)
     }
 

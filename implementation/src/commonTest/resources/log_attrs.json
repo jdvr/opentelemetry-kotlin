@@ -3,10 +3,11 @@
     "resource": {
       "schemaUrl": "SEMCONV_SCHEMA_URL",
       "attributes": {
-        "service.name": "unknown_service",
+        "service.name": "unknown_service:kotlin",
         "telemetry.sdk.name": "opentelemetry",
         "telemetry.sdk.language": "kotlin",
-        "telemetry.sdk.version": "UNKNOWN"
+        "telemetry.sdk.version": "UNKNOWN",
+        "telemetry.sdk.mode": "regular"
       }
     },
     "instrumentationScopeInfo": {
@@ -20,7 +21,7 @@
     "spanContext": {
       "traceId": "00000000000000000000000000000000",
       "spanId": "0000000000000000",
-      "traceFlags": "01",
+      "traceFlags": "00",
       "traceState": {}
     },
     "severity": "UNKNOWN",

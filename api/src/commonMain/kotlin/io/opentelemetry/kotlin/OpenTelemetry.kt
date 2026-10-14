@@ -1,12 +1,8 @@
 package io.opentelemetry.kotlin
 
 import io.opentelemetry.kotlin.config.ConfigProvider
-import io.opentelemetry.kotlin.factory.BaggageFactory
 import io.opentelemetry.kotlin.factory.ContextFactory
-import io.opentelemetry.kotlin.factory.SpanContextFactory
 import io.opentelemetry.kotlin.factory.SpanFactory
-import io.opentelemetry.kotlin.factory.TraceFlagsFactory
-import io.opentelemetry.kotlin.factory.TraceStateFactory
 import io.opentelemetry.kotlin.logging.Logger
 import io.opentelemetry.kotlin.logging.LoggerProvider
 import io.opentelemetry.kotlin.metrics.Meter
@@ -47,21 +43,6 @@ public interface OpenTelemetry {
     public val configProvider: ConfigProvider
 
     /**
-     * Factory that constructs SpanContext objects.
-     */
-    public val spanContext: SpanContextFactory
-
-    /**
-     * Factory that constructs TraceFlags objects.
-     */
-    public val traceFlags: TraceFlagsFactory
-
-    /**
-     * Factory that constructs TraceState objects.
-     */
-    public val traceState: TraceStateFactory
-
-    /**
      * Factory that constructs Context objects.
      */
     public val context: ContextFactory
@@ -70,11 +51,6 @@ public interface OpenTelemetry {
      * Factory that constructs Span objects.
      */
     public val span: SpanFactory
-
-    /**
-     * Factory that constructs Baggage objects.
-     */
-    public val baggage: BaggageFactory
 
     /**
      * The [TextMapPropagator] used to inject and extract context across process boundaries.

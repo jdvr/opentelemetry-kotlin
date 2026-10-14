@@ -7,8 +7,6 @@ import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
-import io.opentelemetry.kotlin.factory.FakeTraceFlagsFactory
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.data.SpanData
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
@@ -41,8 +39,6 @@ internal class SpanDataTest {
             clock = clock,
             processor = processor,
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
-            traceFlagsFactory = FakeTraceFlagsFactory(),
             scope = key,
             resource = fakeResource,
             spanLimitConfig = fakeSpanLimitsConfig,

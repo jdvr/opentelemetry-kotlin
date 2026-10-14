@@ -5,6 +5,7 @@ import io.ktor.client.engine.HttpClientEngine
 import io.opentelemetry.kotlin.ExperimentalApi
 import io.opentelemetry.kotlin.config.validateOrUseDefault
 import io.opentelemetry.kotlin.error.SdkErrorHandler
+import io.opentelemetry.kotlin.getEnvVarValue
 import io.opentelemetry.kotlin.init.ConfigDsl
 
 internal const val DEFAULT_OTLP_HTTP_ENDPOINT = "http://localhost:4318"
@@ -17,9 +18,16 @@ internal const val DEFAULT_OTLP_HTTP_ENDPOINT = "http://localhost:4318"
 public interface OtlpHttpExporterConfigDsl {
 
     /**
-     * Collector base URL. Defaults to `http://localhost:4318`.
+     * Signal-agnostic collector base URL. The signal path is appended automatically.
+     * Defaults to `http://localhost:4318`.
      */
     public var endpoint: String
+
+    /**
+     * Headers supplied for each export request. The provider may suspend, for example to refresh
+     * an authentication token. Defaults to no additional headers.
+     */
+    public var headers: suspend () -> Map<String, String>
 
     /**
      * HTTP request timeout in milliseconds. Defaults to 10 seconds.
@@ -47,6 +55,12 @@ public interface OtlpHttpExporterConfigDsl {
 
 internal class OtlpHttpExporterConfig : OtlpHttpExporterConfigDsl {
     override var endpoint: String = DEFAULT_OTLP_HTTP_ENDPOINT
+        set(value) {
+            field = value
+            endpointConfigured = true
+        }
+    internal var endpointConfigured: Boolean = false
+    override var headers: suspend () -> Map<String, String> = { emptyMap() }
     override var timeoutMs: Long = EXPORT_REQUEST_TIMEOUT_MS
     override var httpClientEngine: HttpClientEngine? = null
     override var httpClient: HttpClient? = null
@@ -54,14 +68,33 @@ internal class OtlpHttpExporterConfig : OtlpHttpExporterConfigDsl {
 
 internal fun createOtlpHttpClient(
     sdkErrorHandler: SdkErrorHandler,
+    signal: OtlpEndpoint,
+    getEnvVar: (String) -> String? = ::getEnvVarValue,
     block: OtlpHttpExporterConfigDsl.() -> Unit,
 ): OtlpClient {
     val config = OtlpHttpExporterConfig().apply(block)
+    val signalEndpoint = if (config.endpointConfigured) {
+        null
+    } else {
+        readEndpointEnvVar(
+            "OTEL_EXPORTER_OTLP_${signal.name.uppercase()}_ENDPOINT",
+            getEnvVar,
+        )
+    }
+    val envEndpoint = if (config.endpointConfigured || signalEndpoint != null) {
+        null
+    } else {
+        readEndpointEnvVar("OTEL_EXPORTER_OTLP_ENDPOINT", getEnvVar)
+    }
     val endpoint = validateOrUseDefault(
         sdkErrorHandler = sdkErrorHandler,
         api = "OtlpHttpExporterConfig",
         configParameterName = "endpoint",
-        value = config.endpoint,
+        value = if (config.endpointConfigured) {
+            config.endpoint
+        } else {
+            envEndpoint ?: config.endpoint
+        },
         default = DEFAULT_OTLP_HTTP_ENDPOINT,
     ) { it.isNotBlank() }
     val timeoutMs = validateOrUseDefault(
@@ -79,5 +112,13 @@ internal fun createOtlpHttpClient(
         baseUrl = endpoint,
         httpClient = httpClient,
         sdkErrorHandler = sdkErrorHandler,
+        signalEndpoint = signalEndpoint,
+        headers = config.headers,
     )
+}
+
+private fun readEndpointEnvVar(name: String, getEnvVar: (String) -> String?): String? = try {
+    getEnvVar(name)?.takeUnless { it.isBlank() }
+} catch (_: Throwable) {
+    null
 }

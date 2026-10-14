@@ -5,14 +5,16 @@ package io.opentelemetry.kotlin.context
 import io.opentelemetry.kotlin.aliases.OtelJavaBaggage
 import io.opentelemetry.kotlin.aliases.OtelJavaContext
 import io.opentelemetry.kotlin.aliases.OtelJavaSpan
-import io.opentelemetry.kotlin.aliases.OtelJavaSpanContext
 import io.opentelemetry.kotlin.baggage.Baggage
-import io.opentelemetry.kotlin.baggage.BaggageAdapter
 import io.opentelemetry.kotlin.baggage.toOtelJavaBaggage
+import io.opentelemetry.kotlin.baggage.toOtelKotlinBaggage
 import io.opentelemetry.kotlin.tracing.NonRecordingSpan
 import io.opentelemetry.kotlin.tracing.Span
+import io.opentelemetry.kotlin.tracing.SpanContext
+import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
 import io.opentelemetry.kotlin.tracing.ext.storeInContext
-import io.opentelemetry.kotlin.tracing.model.SpanContextAdapter
+import io.opentelemetry.kotlin.tracing.ext.toOtelKotlinSpanContext
+import io.opentelemetry.kotlin.tracing.model.OtelJavaSpanAdapter
 
 internal class ContextAdapter(
     val impl: OtelJavaContext,
@@ -20,12 +22,17 @@ internal class ContextAdapter(
 ) : Context {
 
     override fun <T> set(key: ContextKey<T>, value: T?): Context {
-        if (value == null) {
-            return this
-        }
-        val ctx = impl.with(repository.get(key), value)
+        val ctx = impl.with(repository.get(key), value.asJavaValue())
         return ContextAdapter(ctx, repository)
     }
+
+    /**
+     * opentelemetry-java stores null values (clearing the key), but K2 reads its unannotated
+     * parameter as non-null. Casting to a non-reified type parameter is erased and allows
+     * passing null.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <R> Any?.asJavaValue(): R = this as R
 
     override fun <T> get(key: ContextKey<T>): T? {
         return impl[repository.get(key)]
@@ -37,11 +44,17 @@ internal class ContextAdapter(
 
     override fun storeSpan(span: Span): Context = span.storeInContext(this)
 
+    override fun storeSpanContext(spanContext: SpanContext): Context =
+        storeSpan(NonRecordingSpan(createInvalidSpanContext(), spanContext))
+
     override fun extractSpan(): Span {
         val javaSpan = OtelJavaSpan.fromContext(impl)
+        if (javaSpan is OtelJavaSpanAdapter) {
+            return javaSpan.span
+        }
         return NonRecordingSpan(
-            SpanContextAdapter(OtelJavaSpanContext.getInvalid()),
-            SpanContextAdapter(javaSpan.spanContext),
+            createInvalidSpanContext(),
+            javaSpan.spanContext.toOtelKotlinSpanContext(),
         )
     }
 
@@ -49,8 +62,12 @@ internal class ContextAdapter(
         return ContextAdapter(baggage.toOtelJavaBaggage().storeInContext(impl), repository)
     }
 
-    override fun extractBaggage(): Baggage = BaggageAdapter(OtelJavaBaggage.fromContext(impl))
+    override fun extractBaggage(): Baggage = OtelJavaBaggage.fromContext(impl).toOtelKotlinBaggage()
 
     override fun clearBaggage(): Context =
         ContextAdapter(OtelJavaBaggage.empty().storeInContext(impl), repository)
+
+    override fun equals(other: Any?): Boolean = other is ContextAdapter && other.impl == impl
+
+    override fun hashCode(): Int = impl.hashCode()
 }

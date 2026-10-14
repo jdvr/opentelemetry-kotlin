@@ -19,11 +19,13 @@ kotlin {
                 implementation(project(":config-dsl"))
                 implementation(project(":model"))
                 implementation(project(":java-typealiases"))
+                implementation(project(":platform-implementations"))
                 implementation(libs.kotlinx.coroutines)
                 implementation(project.dependencies.platform(libs.opentelemetry.bom))
                 implementation(project.dependencies.platform(libs.opentelemetry.bom.alpha))
                 implementation(libs.opentelemetry.api)
                 implementation(libs.opentelemetry.sdk)
+                implementation(libs.opentelemetry.exporter.logging)
                 implementation(libs.opentelemetry.sdk.extension.incubator)
                 implementation(libs.opentelemetry.extension.trace.propagators)
             }

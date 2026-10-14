@@ -1,7 +1,7 @@
 package io.opentelemetry.kotlin.config.envar.tracing
 
 import io.opentelemetry.kotlin.behavior.SpanLimitsBehavior
-import io.opentelemetry.kotlin.config.envar.EnvVarReader
+import io.opentelemetry.kotlin.config.envar.reader.reportingEnvVarReader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -10,12 +10,12 @@ internal class SpanLimitsEnvVarsTest {
     @Test
     fun `should read every limit`() {
         val env = mapOf(
-            "OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT" to "1",
-            "OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT" to "2",
-            "OTEL_SPAN_LINK_COUNT_LIMIT" to "3",
-            "OTEL_SPAN_EVENT_COUNT_LIMIT" to "4",
-            "OTEL_EVENT_ATTRIBUTE_COUNT_LIMIT" to "5",
-            "OTEL_LINK_ATTRIBUTE_COUNT_LIMIT" to "6",
+            SpanLimitsEnvVars.ATTRIBUTE_COUNT_LIMIT to "1",
+            SpanLimitsEnvVars.ATTRIBUTE_VALUE_LENGTH_LIMIT to "2",
+            SpanLimitsEnvVars.LINK_COUNT_LIMIT to "3",
+            SpanLimitsEnvVars.EVENT_COUNT_LIMIT to "4",
+            SpanLimitsEnvVars.EVENT_ATTRIBUTE_COUNT_LIMIT to "5",
+            SpanLimitsEnvVars.LINK_ATTRIBUTE_COUNT_LIMIT to "6",
         )
         val behavior = toBehavior(env::get)
         assertEquals(
@@ -65,7 +65,7 @@ internal class SpanLimitsEnvVarsTest {
     }
 
     private fun toBehavior(getEnvVar: (String) -> String?) =
-        SpanLimitsEnvVars(EnvVarReader(getEnvVar)).toBehavior()
+        SpanLimitsEnvVars(reportingEnvVarReader(getEnvVar)).toBehavior()
 
     private companion object {
         val INVALID_VALUES = listOf("invalid", "", "-1", "2147483648")

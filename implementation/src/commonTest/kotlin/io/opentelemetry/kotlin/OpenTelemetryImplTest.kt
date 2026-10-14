@@ -6,15 +6,10 @@ import io.opentelemetry.kotlin.export.OperationResultCode
 import io.opentelemetry.kotlin.export.OperationResultCode.Failure
 import io.opentelemetry.kotlin.export.OperationResultCode.Success
 import io.opentelemetry.kotlin.export.TelemetryCloseable
-import io.opentelemetry.kotlin.factory.BaggageFactoryImpl
-import io.opentelemetry.kotlin.factory.FakeBaggageFactory
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
 import io.opentelemetry.kotlin.factory.FakeResourceFactory
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
 import io.opentelemetry.kotlin.factory.FakeSpanFactory
-import io.opentelemetry.kotlin.factory.FakeTraceFlagsFactory
-import io.opentelemetry.kotlin.factory.FakeTraceStateFactory
 import io.opentelemetry.kotlin.logging.FakeLoggerProvider
 import io.opentelemetry.kotlin.logging.LoggerProvider
 import io.opentelemetry.kotlin.metrics.FakeMeterProvider
@@ -24,7 +19,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 @OptIn(ExperimentalApi::class)
 internal class OpenTelemetryImplTest {
@@ -170,20 +164,6 @@ internal class OpenTelemetryImplTest {
     }
 
     @Test
-    fun testBaggageFactory() {
-        val api = createOpenTelemetry()
-        assertIs<BaggageFactoryImpl>(api.baggage)
-
-        val baggage = api.baggage.create {
-            put("user", "alice")
-            put("region", "eu", metadata = "secure")
-        }
-        assertEquals("alice", baggage.getValue("user"))
-        assertEquals("eu", baggage.getValue("region"))
-        assertEquals("secure", baggage.asMap()["region"]?.metadata?.value)
-    }
-
-    @Test
     fun testForceFlushWorksAfterShutdown() = runTest {
         val tracerProvider = FakeCloseableTracerProvider()
         val loggerProvider = FakeCloseableLoggerProvider()
@@ -204,12 +184,8 @@ internal class OpenTelemetryImplTest {
         meterProvider = FakeMeterProvider(),
         configProvider = FakeConfigProvider(),
         clock = FakeClock(),
-        spanContext = FakeSpanContextFactory(),
-        traceFlags = FakeTraceFlagsFactory(),
-        traceState = FakeTraceStateFactory(),
         context = FakeContextFactory(),
         span = FakeSpanFactory(),
-        baggage = FakeBaggageFactory(),
         idGenerator = FakeIdGenerator(),
         resource = FakeResourceFactory(),
         propagator = NoopOpenTelemetry.propagator,

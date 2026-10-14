@@ -1,7 +1,9 @@
 package io.opentelemetry.kotlin.tracing
 
+import io.opentelemetry.kotlin.aliases.OtelJavaCompletableResultCode
 import io.opentelemetry.kotlin.aliases.OtelJavaSdkTracerProvider
-import io.opentelemetry.kotlin.clock.FakeClock
+import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
+import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.OperationResultCode
 import io.opentelemetry.kotlin.factory.CompatContextFactory
 import io.opentelemetry.kotlin.fakes.otel.java.FakeOtelJavaSpanProcessor
@@ -9,6 +11,7 @@ import io.opentelemetry.kotlin.init.CompatSpanLimitsConfig
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
@@ -17,9 +20,9 @@ internal class TracerProviderAdapterTest {
 
     private val adapter = TracerProviderAdapter(
         OtelJavaSdkTracerProvider.builder().build(),
-        FakeClock(),
         CompatSpanLimitsConfig(),
         CompatContextFactory(),
+        NoopSdkErrorHandler,
     )
 
     @Test
@@ -59,14 +62,50 @@ internal class TracerProviderAdapterTest {
             .build()
         val adapter = TracerProviderAdapter(
             provider,
-            FakeClock(),
             CompatSpanLimitsConfig(),
             CompatContextFactory(),
+            NoopSdkErrorHandler,
         )
 
         assertEquals(OperationResultCode.Success, adapter.forceFlush())
         assertEquals(1, processor.flushCount)
         assertEquals(OperationResultCode.Success, adapter.shutdown())
         assertEquals(1, processor.shutdownCount)
+    }
+
+    @Test
+    fun testForceFlushAndShutdownReportExceptions() = runTest {
+        val processor = FakeOtelJavaSpanProcessor()
+        processor.nextResult = { throw IllegalStateException("boom") }
+        val errorHandler = FakeSdkErrorHandler()
+        val adapter = TracerProviderAdapter(
+            OtelJavaSdkTracerProvider.builder().addSpanProcessor(processor).build(),
+            CompatSpanLimitsConfig(),
+            CompatContextFactory(),
+            errorHandler,
+        )
+
+        assertEquals(OperationResultCode.Failure, adapter.forceFlush())
+        assertEquals(OperationResultCode.Failure, adapter.shutdown())
+        assertEquals(
+            listOf("TracerProvider.forceFlush failed", "TracerProvider.shutdown failed"),
+            errorHandler.userCodeErrors.map { it.message },
+        )
+    }
+
+    @Test
+    fun testForceFlushReportsExceptionalFailure() = runTest {
+        val processor = FakeOtelJavaSpanProcessor()
+        processor.nextResult = { OtelJavaCompletableResultCode.ofExceptionalFailure(IllegalStateException("boom")) }
+        val errorHandler = FakeSdkErrorHandler()
+        val adapter = TracerProviderAdapter(
+            OtelJavaSdkTracerProvider.builder().addSpanProcessor(processor).build(),
+            CompatSpanLimitsConfig(),
+            CompatContextFactory(),
+            errorHandler,
+        )
+
+        assertEquals(OperationResultCode.Failure, adapter.forceFlush())
+        assertIs<IllegalStateException>(errorHandler.userCodeErrors.single().cause)
     }
 }

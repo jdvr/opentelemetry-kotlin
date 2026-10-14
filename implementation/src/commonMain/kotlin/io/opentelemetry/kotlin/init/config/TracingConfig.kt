@@ -2,7 +2,6 @@ package io.opentelemetry.kotlin.init.config
 
 import io.opentelemetry.kotlin.ThreadSafe
 import io.opentelemetry.kotlin.error.SdkErrorHandler
-import io.opentelemetry.kotlin.factory.SpanFactory
 import io.opentelemetry.kotlin.resource.Resource
 import io.opentelemetry.kotlin.tracing.TracerConfigImpl
 import io.opentelemetry.kotlin.tracing.TracerConfigurator
@@ -24,11 +23,6 @@ internal class TracingConfig(
     val processor: SpanProcessor?,
 
     /**
-     * Limits on span data capture.
-     */
-    val spanLimits: SpanLimitConfig,
-
-    /**
      * A resource to append to spans.
      */
     val resource: Resource,
@@ -41,18 +35,23 @@ internal class TracingConfig(
     /**
      * Factory that produces the sampler to use when creating spans.
      */
-    val samplerFactory: (SpanFactory) -> Sampler = { _ ->
-        ParentBasedSampler(
-            root = AlwaysOnSampler,
-            remoteParentSampled = AlwaysOnSampler,
-            remoteParentNotSampled = AlwaysOffSampler,
-            localParentSampled = AlwaysOnSampler,
-            localParentNotSampled = AlwaysOffSampler,
-        )
-    },
+    val samplerFactory: () -> Sampler = { DefaultSampler },
 
     /**
      * Computes the per-tracer config.
      */
     val tracerConfigurator: TracerConfigurator = TracerConfigurator { TracerConfigImpl(true) },
+)
+
+/**
+ * The sampler used when none is configured, or when the configured one fails to build.
+ *
+ * https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration
+ */
+internal val DefaultSampler: Sampler = ParentBasedSampler(
+    root = AlwaysOnSampler,
+    remoteParentSampled = AlwaysOnSampler,
+    remoteParentNotSampled = AlwaysOffSampler,
+    localParentSampled = AlwaysOnSampler,
+    localParentNotSampled = AlwaysOffSampler,
 )

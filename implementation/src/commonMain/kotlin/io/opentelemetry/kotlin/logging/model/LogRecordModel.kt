@@ -9,9 +9,13 @@ import io.opentelemetry.kotlin.attributes.DEFAULT_ATTRIBUTE_VALUE_LENGTH_LIMIT
 import io.opentelemetry.kotlin.behavior.AttributeLimitsBehavior
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.error.guard
+import io.opentelemetry.kotlin.error.guardOrDefault
+import io.opentelemetry.kotlin.error.sdkGuard
+import io.opentelemetry.kotlin.error.userCode
 import io.opentelemetry.kotlin.logging.LogRecordDataImpl
 import io.opentelemetry.kotlin.logging.SeverityNumber
 import io.opentelemetry.kotlin.logging.data.LogRecordData
+import io.opentelemetry.kotlin.logging.normalizeLogBody
 import io.opentelemetry.kotlin.resource.Resource
 import io.opentelemetry.kotlin.tracing.SpanContext
 
@@ -23,7 +27,7 @@ import io.opentelemetry.kotlin.tracing.SpanContext
 internal class LogRecordModel(
     override val resource: Resource,
     override val instrumentationScopeInfo: InstrumentationScopeInfo,
-    timestamp: Long,
+    timestamp: Long?,
     observedTimestamp: Long,
     body: Any?,
     eventName: String?,
@@ -40,7 +44,9 @@ internal class LogRecordModel(
     private var observedTimestampImpl: Long? = observedTimestamp
     private var severityNumberImpl: SeverityNumber? = severityNumber
     private var severityTextImpl: String? = severityText
-    private var bodyImpl: Any? = body
+    private var bodyImpl: Any? = sdkErrorHandler.guardOrDefault(null, BODY_ERROR) {
+        normalizeLogBody(body)
+    }
     private var spanContextImpl: SpanContext = spanContext
     private var eventNameImpl: String? = eventName
 
@@ -49,7 +55,7 @@ internal class LogRecordModel(
      * a public API method, so a failure is reported and swallowed.
      */
     private inline fun mutate(details: String, action: () -> Unit) {
-        sdkErrorHandler.guard(details) {
+        sdkErrorHandler.sdkGuard(details) {
             lock.write {
                 action()
             }
@@ -82,8 +88,11 @@ internal class LogRecordModel(
 
     override var body: Any?
         get() = lock.read { bodyImpl }
-        set(value) = mutate("LogRecord.body failed") {
-            bodyImpl = value
+        set(value) = sdkErrorHandler.guard(BODY_ERROR) {
+            val normalized = normalizeLogBody(value)
+            lock.write {
+                bodyImpl = normalized
+            }
         }
 
     override var spanContext: SpanContext
@@ -146,7 +155,7 @@ internal class LogRecordModel(
         value: List<Boolean>
     ) {
         mutate("LogRecord.setBooleanListAttribute failed") {
-            attrs.setBooleanListAttribute(key, value)
+            userCode { attrs.setBooleanListAttribute(key, value) }
         }
     }
 
@@ -155,7 +164,7 @@ internal class LogRecordModel(
         value: List<String>
     ) {
         mutate("LogRecord.setStringListAttribute failed") {
-            attrs.setStringListAttribute(key, value)
+            userCode { attrs.setStringListAttribute(key, value) }
         }
     }
 
@@ -164,7 +173,7 @@ internal class LogRecordModel(
         value: List<Long>
     ) {
         mutate("LogRecord.setLongListAttribute failed") {
-            attrs.setLongListAttribute(key, value)
+            userCode { attrs.setLongListAttribute(key, value) }
         }
     }
 
@@ -173,7 +182,7 @@ internal class LogRecordModel(
         value: List<Double>
     ) {
         mutate("LogRecord.setDoubleListAttribute failed") {
-            attrs.setDoubleListAttribute(key, value)
+            userCode { attrs.setDoubleListAttribute(key, value) }
         }
     }
 
@@ -185,7 +194,7 @@ internal class LogRecordModel(
 
     override fun setAnyValueAttribute(key: String, value: AnyValue) {
         mutate("LogRecord.setAnyValueAttribute failed") {
-            attrs.setAnyValueAttribute(key, value)
+            userCode { attrs.setAnyValueAttribute(key, value) }
         }
     }
 
@@ -209,3 +218,5 @@ internal class LogRecordModel(
         )
     }
 }
+
+private const val BODY_ERROR = "LogRecord.body failed"

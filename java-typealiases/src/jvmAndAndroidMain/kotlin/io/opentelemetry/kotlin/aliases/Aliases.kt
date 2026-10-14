@@ -10,6 +10,9 @@ import io.opentelemetry.api.baggage.BaggageEntryMetadata
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.common.AttributesBuilder
+import io.opentelemetry.api.common.KeyValue
+import io.opentelemetry.api.common.Value
+import io.opentelemetry.api.common.ValueType
 import io.opentelemetry.api.internal.ImmutableSpanContext
 import io.opentelemetry.api.logs.LogRecordBuilder
 import io.opentelemetry.api.logs.Logger
@@ -42,6 +45,7 @@ import io.opentelemetry.api.trace.TracerBuilder
 import io.opentelemetry.api.trace.TracerProvider
 import io.opentelemetry.context.Context
 import io.opentelemetry.context.ContextKey
+import io.opentelemetry.context.ContextStorage
 import io.opentelemetry.context.ImplicitContextKeyed
 import io.opentelemetry.context.Scope
 import io.opentelemetry.context.propagation.ContextPropagators
@@ -104,6 +108,7 @@ typealias OtelJavaTraceState = TraceState
 typealias OtelJavaSpanKind = SpanKind
 typealias OtelJavaStatusCode = StatusCode
 typealias OtelJavaContext = Context
+typealias OtelJavaContextStorage = ContextStorage
 typealias OtelJavaContextKey<T> = ContextKey<T>
 typealias OtelJavaTracer = Tracer
 typealias OtelJavaTracerProvider = TracerProvider
@@ -154,6 +159,9 @@ typealias OtelJavaSdkTracerProviderBuilder = SdkTracerProviderBuilder
 typealias OtelJavaSdkTracerProviderUtil = SdkTracerProviderUtil
 typealias OtelJavaTracerConfig = TracerConfig
 typealias OtelJavaBody = Body
+typealias OtelJavaValue<T> = Value<T>
+typealias OtelJavaValueType = ValueType
+typealias OtelJavaKeyValue = KeyValue
 typealias OtelJavaInstrumentationLibraryInfo = InstrumentationLibraryInfo
 typealias OtelJavaAttributesBuilder = AttributesBuilder
 typealias OtelJavaSpanBuilder = SpanBuilder

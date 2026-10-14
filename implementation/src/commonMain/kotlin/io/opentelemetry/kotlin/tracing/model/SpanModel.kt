@@ -1,6 +1,7 @@
 package io.opentelemetry.kotlin.tracing.model
 
 import io.opentelemetry.kotlin.Clock
+import io.opentelemetry.kotlin.ClockProvider
 import io.opentelemetry.kotlin.InstrumentationScopeInfo
 import io.opentelemetry.kotlin.ReentrantReadWriteLock
 import io.opentelemetry.kotlin.ThreadLocal
@@ -10,6 +11,9 @@ import io.opentelemetry.kotlin.attributes.AttributesMutator
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.error.guard
 import io.opentelemetry.kotlin.error.guardOrDefault
+import io.opentelemetry.kotlin.error.sdkGuard
+import io.opentelemetry.kotlin.error.sdkGuardOrDefault
+import io.opentelemetry.kotlin.error.userCode
 import io.opentelemetry.kotlin.init.config.SpanLimitConfig
 import io.opentelemetry.kotlin.resource.Resource
 import io.opentelemetry.kotlin.tracing.SpanContext
@@ -30,7 +34,7 @@ import io.opentelemetry.kotlin.tracing.toSnapshot
  * span has ended, depending on which API call they make.
  */
 internal class SpanModel(
-    private val clock: Clock,
+    override val clock: Clock,
     private val processor: SpanProcessor?,
     name: String,
     override val spanKind: SpanKind,
@@ -44,7 +48,7 @@ internal class SpanModel(
     private val initialDroppedAttributesCount: Int = 0,
     initialDroppedLinksCount: Int = 0,
     private val sdkErrorHandler: SdkErrorHandler
-) : ReadWriteSpan, SpanCreationAction {
+) : ReadWriteSpan, SpanCreationAction, ClockProvider {
 
     private enum class State {
         STARTED,
@@ -79,15 +83,19 @@ internal class SpanModel(
      * swallowed.
      */
     private inline fun mutate(details: String, action: () -> Unit) {
-        sdkErrorHandler.guard(details) {
+        sdkErrorHandler.sdkGuard(details) {
             lock.write {
-                val isEndingOnThisThread = state == State.ENDING &&
-                    endingSpan.isInitialized() && endingSpan.value.get() === this
-                if (state == State.STARTED || isEndingOnThisThread) {
+                if (canMutateInternal()) {
                     action()
                 }
             }
         }
+    }
+
+    private fun canMutateInternal(): Boolean {
+        val isEndingOnThisThread = state == State.ENDING &&
+            endingSpan.isInitialized() && endingSpan.value.get() === this
+        return state == State.STARTED || isEndingOnThisThread
     }
 
     override fun setName(name: String) {
@@ -117,12 +125,16 @@ internal class SpanModel(
     }
 
     override fun end(timestamp: Long) {
-        endInternal(timestamp)
+        if (timestamp <= 0L) {
+            end()
+        } else {
+            endInternal(timestamp)
+        }
     }
 
     @Suppress("NOTHING_TO_INLINE")
     private inline fun endInternal(timestamp: Long) {
-        sdkErrorHandler.guard("Span.end failed") {
+        sdkErrorHandler.sdkGuard("Span.end failed") {
             val shouldEnd = lock.write {
                 if (state != State.STARTED) {
                     return@write false
@@ -151,7 +163,7 @@ internal class SpanModel(
                 // take a snapshot so that processors retain plain data rather than this
                 // model, releasing its properties once the span
                 // has ended. Only built if a processor needs it.
-                processor?.takeIf(SpanProcessor::isEndRequired)?.let { endProcessor ->
+                processor?.takeIf { userCode { it.isEndRequired() } }?.let { endProcessor ->
                     endProcessor to toSpanData()
                 }
             }
@@ -165,7 +177,7 @@ internal class SpanModel(
     }
 
     override fun isRecording(): Boolean =
-        sdkErrorHandler.guardOrDefault(false, "Span.isRecording failed") {
+        sdkErrorHandler.sdkGuardOrDefault(false, "Span.isRecording failed") {
             lock.read { isRecordingInternal() }
         }
 
@@ -206,12 +218,22 @@ internal class SpanModel(
         spanContext: SpanContext,
         attributes: (AttributesMutator.() -> Unit)?
     ) {
-        mutate("Span.addLink failed") {
-            if (linksList.size < spanLimitConfig.linkCountLimit) {
-                val link = buildSpanLink(spanContext, attributes, spanLimitConfig)
-                linksList.add(link)
-            } else {
-                droppedLinksCountImpl++
+        sdkErrorHandler.sdkGuard("Span.addLink failed") {
+            val hasCapacity = reserve(
+                hasCapacity = { linksList.size < spanLimitConfig.linkCountLimit },
+                onDropped = { droppedLinksCountImpl++ }
+            )
+            if (!hasCapacity) {
+                return
+            }
+            // avoid running user code under the lock
+            val link = buildSpanLink(spanContext, attributes, spanLimitConfig) ?: return
+            mutate("Span.addLink failed") {
+                if (linksList.size < spanLimitConfig.linkCountLimit) {
+                    linksList.add(link)
+                } else {
+                    droppedLinksCountImpl++
+                }
             }
         }
     }
@@ -221,22 +243,49 @@ internal class SpanModel(
         timestamp: Long?,
         attributes: (AttributesMutator.() -> Unit)?
     ) {
-        mutate("Span.addEvent failed") {
-            if (eventsList.size < spanLimitConfig.eventCountLimit) {
-                val container = AttributesModel(
-                    attributeLimit = spanLimitConfig.attributeCountPerEventLimit,
-                    attributeValueLengthLimit = spanLimitConfig.attributeValueLengthLimit
-                )
-                if (attributes != null) {
-                    attributes(container)
+        sdkErrorHandler.sdkGuard("Span.addEvent failed") {
+            val hasCapacity = reserve(
+                hasCapacity = { eventsList.size < spanLimitConfig.eventCountLimit },
+                onDropped = { droppedEventsCountImpl++ }
+            )
+            if (!hasCapacity) {
+                return
+            }
+            // avoid running user code under the lock
+            val eventTimestamp = timestamp?.takeIf { it > 0 } ?: userCode { clock.now() }
+            val container = AttributesModel(
+                attributeLimit = spanLimitConfig.attributeCountPerEventLimit,
+                attributeValueLengthLimit = spanLimitConfig.attributeValueLengthLimit
+            )
+            if (attributes != null) {
+                userCode { attributes(container) }
+            }
+            val event = SpanEventImpl(name, eventTimestamp, container)
+            mutate("Span.addEvent failed") {
+                if (eventsList.size < spanLimitConfig.eventCountLimit) {
+                    eventsList.add(event)
+                } else {
+                    droppedEventsCountImpl++
                 }
-                val event = SpanEventImpl(name, timestamp ?: clock.now(), container)
-                eventsList.add(event)
-            } else {
-                droppedEventsCountImpl++
             }
         }
     }
+
+    private inline fun reserve(hasCapacity: () -> Boolean, onDropped: () -> Unit): Boolean =
+        lock.write {
+            when {
+                !canMutateInternal() -> {
+                    false
+                }
+                hasCapacity() -> {
+                    true
+                }
+                else -> {
+                    onDropped()
+                    false
+                }
+            }
+        }
 
     /**
      * Takes the snapshot under a single read lock so that the returned [ReadableSpan] is internally
@@ -318,7 +367,7 @@ internal class SpanModel(
         value: List<Boolean>
     ) {
         mutate("Span.setBooleanListAttribute failed") {
-            attrs.setBooleanListAttribute(key, value)
+            userCode { attrs.setBooleanListAttribute(key, value) }
         }
     }
 
@@ -327,7 +376,7 @@ internal class SpanModel(
         value: List<String>
     ) {
         mutate("Span.setStringListAttribute failed") {
-            attrs.setStringListAttribute(key, value)
+            userCode { attrs.setStringListAttribute(key, value) }
         }
     }
 
@@ -336,7 +385,7 @@ internal class SpanModel(
         value: List<Long>
     ) {
         mutate("Span.setLongListAttribute failed") {
-            attrs.setLongListAttribute(key, value)
+            userCode { attrs.setLongListAttribute(key, value) }
         }
     }
 
@@ -345,7 +394,7 @@ internal class SpanModel(
         value: List<Double>
     ) {
         mutate("Span.setDoubleListAttribute failed") {
-            attrs.setDoubleListAttribute(key, value)
+            userCode { attrs.setDoubleListAttribute(key, value) }
         }
     }
 
@@ -357,7 +406,7 @@ internal class SpanModel(
 
     override fun setAnyValueAttribute(key: String, value: AnyValue) {
         mutate("Span.setAnyValueAttribute failed") {
-            attrs.setAnyValueAttribute(key, value)
+            userCode { attrs.setAnyValueAttribute(key, value) }
         }
     }
 }

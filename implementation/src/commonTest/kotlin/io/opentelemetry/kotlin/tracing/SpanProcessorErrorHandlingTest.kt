@@ -7,10 +7,9 @@ import io.opentelemetry.kotlin.error.SdkErrorSeverity
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
-import io.opentelemetry.kotlin.factory.FakeTraceFlagsFactory
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,8 +31,6 @@ internal class SpanProcessorErrorHandlingTest {
             clock = FakeClock(),
             processor = processor,
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
-            traceFlagsFactory = FakeTraceFlagsFactory(),
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = fakeSpanLimitsConfig,
@@ -93,7 +90,22 @@ internal class SpanProcessorErrorHandlingTest {
         assertTrue(errorHandler.userCodeErrors.all { it.cause.message == "boom" })
     }
 
+    @Test
+    fun testCallbacksThrowingCancellationExceptionAreContained() {
+        processor.startAction = { _, _ -> cancel() }
+        processor.endingAction = { cancel() }
+        processor.endAction = { cancel() }
+        val span = tracer.startSpan("test")
+        span.end()
+
+        assertEquals(3, errorHandler.userCodeErrors.size)
+        assertTrue(errorHandler.userCodeErrors.all { it.cause is CancellationException })
+        assertFalse(span.isRecording())
+    }
+
     private fun boom(): Nothing = error("boom")
+
+    private fun cancel(): Nothing = throw CancellationException("boom")
 
     private fun assertSingleError() {
         val error = errorHandler.userCodeErrors.single()

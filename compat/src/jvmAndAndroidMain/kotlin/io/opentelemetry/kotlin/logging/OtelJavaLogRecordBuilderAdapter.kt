@@ -4,14 +4,19 @@ import io.opentelemetry.kotlin.aliases.OtelJavaAttributeKey
 import io.opentelemetry.kotlin.aliases.OtelJavaContext
 import io.opentelemetry.kotlin.aliases.OtelJavaLogRecordBuilder
 import io.opentelemetry.kotlin.aliases.OtelJavaSeverity
+import io.opentelemetry.kotlin.aliases.OtelJavaValue
 import io.opentelemetry.kotlin.attributes.setTypedAttributes
+import io.opentelemetry.kotlin.attributes.toOtelKotlinBody
 import io.opentelemetry.kotlin.context.toOtelKotlinContext
+import io.opentelemetry.kotlin.factory.ContextFactory
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-internal class OtelJavaLogRecordBuilderAdapter(private val impl: Logger) :
-    OtelJavaLogRecordBuilder {
+internal class OtelJavaLogRecordBuilderAdapter(
+    private val impl: Logger,
+    private val contextFactory: ContextFactory,
+) : OtelJavaLogRecordBuilder {
 
     private var timestamp: Long? = null
     private var observedTimestamp: Long? = null
@@ -19,6 +24,8 @@ internal class OtelJavaLogRecordBuilderAdapter(private val impl: Logger) :
     private var severity: OtelJavaSeverity? = null
     private var severityText: String? = null
     private var body: Any? = null
+    private var eventName: String? = null
+    private var exception: Throwable? = null
     private val attrs = ConcurrentHashMap<String, Any>()
 
     override fun setTimestamp(timestamp: Long, unit: TimeUnit): OtelJavaLogRecordBuilder {
@@ -65,6 +72,21 @@ internal class OtelJavaLogRecordBuilderAdapter(private val impl: Logger) :
         return this
     }
 
+    override fun setBody(body: OtelJavaValue<*>): OtelJavaLogRecordBuilder {
+        this.body = body.toOtelKotlinBody()
+        return this
+    }
+
+    override fun setEventName(eventName: String): OtelJavaLogRecordBuilder {
+        this.eventName = eventName
+        return this
+    }
+
+    override fun setException(throwable: Throwable): OtelJavaLogRecordBuilder {
+        this.exception = throwable
+        return this
+    }
+
     override fun <T : Any?> setAttribute(
         key: OtelJavaAttributeKey<T>,
         value: T?
@@ -76,11 +98,13 @@ internal class OtelJavaLogRecordBuilderAdapter(private val impl: Logger) :
     override fun emit() {
         impl.emit(
             body = body,
+            eventName = eventName,
             timestamp = timestamp,
             observedTimestamp = observedTimestamp,
-            context = context?.toOtelKotlinContext(),
+            context = context?.toOtelKotlinContext() ?: contextFactory.implicit(),
             severityNumber = severity?.toOtelKotlinSeverityNumber(),
             severityText = severityText,
+            exception = exception,
             attributes = { setTypedAttributes(attrs) }
         )
     }

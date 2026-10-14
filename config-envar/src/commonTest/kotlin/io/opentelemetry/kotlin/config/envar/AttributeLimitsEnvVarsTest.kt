@@ -1,6 +1,7 @@
 package io.opentelemetry.kotlin.config.envar
 
 import io.opentelemetry.kotlin.behavior.AttributeLimitsBehavior
+import io.opentelemetry.kotlin.config.envar.reader.reportingEnvVarReader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -9,8 +10,8 @@ internal class AttributeLimitsEnvVarsTest {
     @Test
     fun `should read every limit`() {
         val env = mapOf(
-            "OTEL_ATTRIBUTE_COUNT_LIMIT" to "64",
-            "OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT" to "256",
+            AttributeLimitsEnvVars.ATTRIBUTE_COUNT_LIMIT to "64",
+            AttributeLimitsEnvVars.ATTRIBUTE_VALUE_LENGTH_LIMIT to "256",
         )
         val behavior = toBehavior(env::get)
         assertEquals(
@@ -46,7 +47,7 @@ internal class AttributeLimitsEnvVarsTest {
     }
 
     private fun toBehavior(getEnvVar: (String) -> String?) =
-        AttributeLimitsEnvVars(EnvVarReader(getEnvVar)).toBehavior()
+        AttributeLimitsEnvVars(reportingEnvVarReader(getEnvVar)).toBehavior()
 
     private companion object {
         val INVALID_VALUES = listOf("invalid", "", "-1", "2147483648")

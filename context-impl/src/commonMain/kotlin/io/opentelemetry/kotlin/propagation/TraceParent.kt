@@ -1,12 +1,11 @@
 package io.opentelemetry.kotlin.propagation
 
 import io.opentelemetry.kotlin.ExperimentalApi
-import io.opentelemetry.kotlin.error.SdkError
-import io.opentelemetry.kotlin.error.SdkErrorHandler
-import io.opentelemetry.kotlin.error.SdkErrorSeverity
-import io.opentelemetry.kotlin.error.reportError
-import io.opentelemetry.kotlin.factory.TraceFlagsFactory
+import io.opentelemetry.kotlin.propagation.utils.SPAN_ID_HEX_LENGTH
+import io.opentelemetry.kotlin.propagation.utils.TRACE_ID_HEX_LENGTH
+import io.opentelemetry.kotlin.propagation.utils.isValidLowercaseHex
 import io.opentelemetry.kotlin.tracing.TraceFlags
+import io.opentelemetry.kotlin.tracing.createSpanContext
 
 /**
  * Implementation of a W3C `traceparent` header.
@@ -36,8 +35,6 @@ public class TraceParent private constructor(
 
         private const val FORBIDDEN_VERSION = "ff"
         private const val VERSION_LEN = 2
-        private const val TRACE_ID_LEN = 32
-        private const val SPAN_ID_LEN = 16
         private const val FLAGS_LEN = 2
         private const val LEN_V00 = 55
         private const val EXPECTED_FIELD_COUNT = 4
@@ -55,38 +52,18 @@ public class TraceParent private constructor(
             traceId: String,
             spanId: String,
             traceFlags: TraceFlags,
-            sdkErrorHandler: SdkErrorHandler,
         ): TraceParent? {
-            val errorMessage =
-                if (version.length != VERSION_LEN || !version.isLowerHex() || version == FORBIDDEN_VERSION) {
-                    "version must be $VERSION_LEN lowercase hex characters and not $FORBIDDEN_VERSION"
-                } else if (traceId.length != TRACE_ID_LEN || !traceId.isLowerHex()) {
-                    "traceId must be $TRACE_ID_LEN lowercase hex characters"
-                } else if (spanId.length != SPAN_ID_LEN || !spanId.isLowerHex()) {
-                    "spanId must be $SPAN_ID_LEN lowercase hex characters"
-                } else {
-                    null
-                }
-
-            return if (errorMessage == null) {
+            val valid = version.length == VERSION_LEN && version.isValidLowercaseHex() && version != FORBIDDEN_VERSION &&
+                traceId.length == TRACE_ID_HEX_LENGTH && traceId.isValidLowercaseHex() &&
+                spanId.length == SPAN_ID_HEX_LENGTH && spanId.isValidLowercaseHex()
+            return if (valid) {
                 TraceParent(version, traceId, spanId, traceFlags)
             } else {
-                sdkErrorHandler.reportError(
-                    SdkError.ApiMisuse(
-                        api = "TraceParent.create",
-                        message = errorMessage,
-                        severity = SdkErrorSeverity.WARNING,
-                    )
-                )
                 null
             }
         }
 
-        fun decode(
-            header: String,
-            traceFlagsFactory: TraceFlagsFactory,
-            sdkErrorHandler: SdkErrorHandler,
-        ): TraceParent? {
+        fun decode(header: String): TraceParent? {
             if (header.length < LEN_V00) {
                 return null
             }
@@ -106,7 +83,7 @@ public class TraceParent private constructor(
             }
 
             val flagsStr = parts[3]
-            if (flagsStr.length != FLAGS_LEN || !flagsStr.isLowerHex()) {
+            if (flagsStr.length != FLAGS_LEN || !flagsStr.isValidLowercaseHex()) {
                 return null
             }
 
@@ -114,10 +91,14 @@ public class TraceParent private constructor(
                 version = version,
                 traceId = parts[1],
                 spanId = parts[2],
-                traceFlags = traceFlagsFactory.fromHex(flagsStr),
-                sdkErrorHandler = sdkErrorHandler,
+                traceFlags = decodeFlags(flagsStr.toInt(HEX_RADIX)),
             )
         }
+
+        private fun decodeFlags(byte: Int): TraceFlags = createSpanContext(ByteArray(0), ByteArray(0)) {
+            isSampled = (byte and FLAG_SAMPLED) != 0
+            isRandom = (byte and FLAG_RANDOM) != 0
+        }.traceFlags
 
         private fun encodeFlags(flags: TraceFlags): String {
             var byte = 0
@@ -129,7 +110,5 @@ public class TraceParent private constructor(
             }
             return byte.toString(HEX_RADIX).padStart(FLAGS_LEN, '0')
         }
-
-        private fun String.isLowerHex(): Boolean = all { it in '0'..'9' || it in 'a'..'f' }
     }
 }

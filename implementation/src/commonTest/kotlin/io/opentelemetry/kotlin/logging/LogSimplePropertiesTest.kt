@@ -5,7 +5,6 @@ import io.opentelemetry.kotlin.clock.FakeClock
 import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
 import io.opentelemetry.kotlin.logging.export.FakeLogRecordProcessor
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.fakeLogLimitsConfig
@@ -29,7 +28,6 @@ internal class LogSimplePropertiesTest {
             clock = clock,
             processor = processor,
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
             key = key,
             resource = FakeResource(),
             logLimits = fakeLogLimitsConfig,
@@ -46,7 +44,7 @@ internal class LogSimplePropertiesTest {
 
         val log = processor.logs.single()
         assertNull(log.body)
-        assertEquals(now, log.timestamp)
+        assertNull(log.timestamp)
         assertEquals(now, log.observedTimestamp)
         assertEquals(SeverityNumber.UNKNOWN, log.severityNumber)
         assertNull(log.severityText)
@@ -70,5 +68,25 @@ internal class LogSimplePropertiesTest {
         assertEquals(3, log.observedTimestamp)
         assertEquals(SeverityNumber.INFO, log.severityNumber)
         assertEquals(severityText, log.severityText)
+    }
+
+    @Test
+    fun testZeroTimestampsAreInvalid() {
+        clock.time = 5
+        logger.emit(timestamp = 0, observedTimestamp = 0)
+
+        val log = processor.logs.single()
+        assertNull(log.timestamp)
+        assertEquals(clock.time, log.observedTimestamp)
+    }
+
+    @Test
+    fun testNegativeTimestampsAreInvalid() {
+        clock.time = 5
+        logger.emit(timestamp = -1, observedTimestamp = -1)
+
+        val log = processor.logs.single()
+        assertNull(log.timestamp)
+        assertEquals(clock.time, log.observedTimestamp)
     }
 }

@@ -1,7 +1,6 @@
 package io.opentelemetry.kotlin.context
 
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
 import io.opentelemetry.kotlin.tracing.FakeSpan
 import kotlin.test.Test
@@ -9,7 +8,7 @@ import kotlin.test.assertSame
 
 internal class SpanStorageTest {
 
-    private val spanFactory = SpanFactoryImpl(SpanContextFactoryImpl())
+    private val spanFactory = SpanFactoryImpl()
     private val contextFactory = ContextFactoryImpl(spanFactory)
 
     @Test

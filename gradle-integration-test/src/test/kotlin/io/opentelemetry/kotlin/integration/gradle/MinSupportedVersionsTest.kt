@@ -4,6 +4,8 @@ import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.PrintStream
+import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -19,10 +21,10 @@ class MinSupportedVersionsTest {
         )
     }
 
-    // Klib (iOS/JS) consumers need at least the Kotlin version this library is built with, so the
+    // Klib (Apple/JS) consumers need at least the Kotlin version this library is built with, so the
     // fixture builds with the declared klib floor (minSupportedKotlinKlib). A Kotlin bump that
     // outgrows that pin fails here — raising the floor must be a deliberate decision, not a side
-    // effect of a dependency update. iOS coverage requires a macOS host.
+    // effect of a dependency update. Apple platform coverage requires a macOS host.
     @Test
     fun `min supported versions can consume klib artifacts`(@TempDir tmp: Path) {
         assembleFixture(
@@ -41,6 +43,7 @@ class MinSupportedVersionsTest {
         copyRecursively(fixtureSrc, tmp)
 
         val runner = GradleRunner.create()
+            .withTestKitDir(File(systemProperty("testKitDir")))
             .withProjectDir(tmp.toFile())
             .withGradleVersion(gradleVersion)
             .withArguments(
@@ -53,8 +56,43 @@ class MinSupportedVersionsTest {
                 "--stacktrace",
                 "--no-configuration-cache",
             )
-            .forwardOutput()
+            .forwardStdOutput(LinePrefixingWriter("[$fixtureName] ", System.out))
+            .forwardStdError(LinePrefixingWriter("[$fixtureName] ", System.err))
         runner.build()
+    }
+
+    private class LinePrefixingWriter(
+        private val prefix: String,
+        private val out: PrintStream,
+    ) : Writer() {
+        private val line = StringBuilder()
+
+        override fun write(cbuf: CharArray, off: Int, len: Int) {
+            for (i in off until off + len) {
+                val c = cbuf[i]
+                if (c == '\n') {
+                    flushLine()
+                } else {
+                    line.append(c)
+                }
+            }
+        }
+
+        override fun flush() {
+            out.flush()
+        }
+
+        override fun close() {
+            if (line.isNotEmpty()) {
+                flushLine()
+            }
+            flush()
+        }
+
+        private fun flushLine() {
+            out.println(prefix + line)
+            line.setLength(0)
+        }
     }
 
     private fun systemProperty(name: String): String =

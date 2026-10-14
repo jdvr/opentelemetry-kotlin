@@ -1,5 +1,3 @@
-import com.codingfeline.buildkonfig.compiler.FieldSpec
-
 plugins {
     kotlin("multiplatform")
     id("com.android.kotlin.multiplatform.library")
@@ -7,15 +5,6 @@ plugins {
     id("signing")
     id("com.vanniktech.maven.publish")
     id("org.jetbrains.kotlinx.kover")
-    alias(libs.plugins.buildKonfig)
-}
-
-buildkonfig {
-    packageName = "io.opentelemetry.kotlin"
-
-    defaultConfigs {
-        buildConfigField(FieldSpec.Type.STRING, "SDK_VERSION", project.version.toString())
-    }
 }
 
 kotlin {
@@ -29,15 +18,16 @@ kotlin {
                 implementation(project(":config"))
                 implementation(project(":config-yaml"))
                 implementation(project(":context-impl"))
+                implementation(project(":propagation-utils"))
                 implementation(project(":config-dsl"))
                 implementation(project(":model"))
                 implementation(project(":platform-implementations"))
                 implementation(project(":semconv"))
                 implementation(project(":exporters-core"))
                 implementation(project(":noop"))
-                implementation(project(":api-propagators"))
                 implementation(project(":semconv"))
                 implementation(libs.kotlinx.coroutines)
+                implementation(libs.kotlin.serialization)
             }
         }
         commonTest {
@@ -56,13 +46,10 @@ kotlin {
                 implementation(project(":integration-test"))
                 implementation(project.dependencies.platform(libs.opentelemetry.bom))
                 implementation(libs.opentelemetry.api)
+                implementation(libs.opentelemetry.sdk)
             }
         }
     }
-}
-
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    exclude { it.file.path.contains("buildkonfig") }
 }
 
 tasks.register<Copy>("copyiOSTestResources") {
@@ -72,4 +59,13 @@ tasks.register<Copy>("copyiOSTestResources") {
 
 tasks.named("iosSimulatorArm64Test").configure {
     dependsOn("copyiOSTestResources")
+}
+
+tasks.register<Copy>("copyTvOSTestResources") {
+    from("src/commonTest/resources")
+    into("build/bin/tvosSimulatorArm64/debugTest/resources")
+}
+
+tasks.named("tvosSimulatorArm64Test").configure {
+    dependsOn("copyTvOSTestResources")
 }

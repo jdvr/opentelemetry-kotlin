@@ -1,19 +1,18 @@
 package io.opentelemetry.kotlin
 
-import io.opentelemetry.kotlin.baggage.NoopBaggage
 import io.opentelemetry.kotlin.config.NoopConfigProperties
 import io.opentelemetry.kotlin.config.NoopConfigProvider
 import io.opentelemetry.kotlin.context.NoopContext
 import io.opentelemetry.kotlin.context.NoopContextKey
 import io.opentelemetry.kotlin.export.OperationResultCode
-import io.opentelemetry.kotlin.factory.NoopBaggageFactory
 import io.opentelemetry.kotlin.logging.SeverityNumber
-import io.opentelemetry.kotlin.propagation.NoopTextMapPropagator
+import io.opentelemetry.kotlin.metrics.NoopObservableDoubleMeasurement
+import io.opentelemetry.kotlin.metrics.NoopObservableLongMeasurement
 import io.opentelemetry.kotlin.propagation.TextMapGetter
 import io.opentelemetry.kotlin.propagation.TextMapSetter
+import io.opentelemetry.kotlin.propagation.createNoopPropagator
 import io.opentelemetry.kotlin.tracing.NoopSpan
 import io.opentelemetry.kotlin.tracing.NoopSpanContext
-import io.opentelemetry.kotlin.tracing.NoopTraceFlags
 import io.opentelemetry.kotlin.tracing.SpanKind
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -160,25 +159,6 @@ internal class NoopTests {
     }
 
     @Test
-    fun testNoopSpanContext() {
-        val otel = NoopOpenTelemetry as OpenTelemetrySdk
-        val invalid = otel.spanContext.invalid
-        assertTrue(invalid is NoopSpanContext)
-        assertFalse(invalid.isValid)
-        assertEquals(16, invalid.traceIdBytes.size)
-        assertEquals(8, invalid.spanIdBytes.size)
-
-        val other = otel.spanContext.create(
-            otel.idGenerator.generateTraceIdBytes(),
-            otel.idGenerator.generateSpanIdBytes(),
-            otel.traceFlags.default,
-            otel.traceState.default,
-            false,
-        )
-        assertSame(invalid, other)
-    }
-
-    @Test
     fun testStoreSpan() {
         val otel = NoopOpenTelemetry
         val span = otel.tracerProvider.getTracer("tracer").startSpan("span")
@@ -187,11 +167,9 @@ internal class NoopTests {
     }
 
     @Test
-    fun testNoopTraceFlagsFactory() {
-        val otel = NoopOpenTelemetry
-        val traceFlagsFactory = otel.traceFlags
-        assertTrue(traceFlagsFactory.fromHex("01") is NoopTraceFlags)
-        assertTrue(traceFlagsFactory.fromHex("01") is NoopTraceFlags)
+    fun testStoreSpanContext() {
+        val root = NoopOpenTelemetry.context.root()
+        assertSame(root, root.storeSpanContext(NoopSpanContext))
     }
 
     @Test
@@ -202,7 +180,7 @@ internal class NoopTests {
         assertTrue(first is NoopSpan)
         assertFalse(first.isRecording())
 
-        val second = otel.span.fromSpanContext(otel.spanContext.invalid)
+        val second = otel.span.fromSpanContext(NoopSpanContext)
         assertTrue(second is NoopSpan)
 
         val third = otel.context.root().extractSpan()
@@ -233,13 +211,13 @@ internal class NoopTests {
 
     @Test
     fun testNoopTextMapPropagator() {
-        assertEquals(emptyList(), NoopTextMapPropagator.fields())
+        assertEquals(emptyList(), createNoopPropagator().fields())
 
         val ctx = NoopOpenTelemetry.context.root()
         val carrier = mutableMapOf("key" to "value")
 
         // inject is a no-op — setter must never be called
-        NoopTextMapPropagator.inject(ctx, carrier, TextMapSetter { _, _, _ -> error("setter should not be called") })
+        createNoopPropagator().inject(ctx, carrier, TextMapSetter { _, _, _ -> error("setter should not be called") })
         assertEquals(mapOf("key" to "value"), carrier)
 
         // extract returns the original context unchanged
@@ -249,24 +227,12 @@ internal class NoopTests {
             override fun getAll(carrier: MutableMap<String, String>?, key: String): List<String> =
                 carrier?.get(key)?.let { listOf(it) } ?: emptyList()
         }
-        assertSame(ctx, NoopTextMapPropagator.extract(ctx, carrier, getter))
+        assertSame(ctx, createNoopPropagator().extract(ctx, carrier, getter))
     }
 
     @Test
     fun testNoopOpenTelemetryPropagator() {
-        assertSame(NoopTextMapPropagator, NoopOpenTelemetry.propagator)
-    }
-
-    @Test
-    fun testNoopBaggageFactory() {
-        assertSame(NoopBaggage, NoopBaggageFactory.empty())
-        assertSame(NoopBaggage, NoopBaggageFactory.create { })
-    }
-
-    @Test
-    fun testNoopOpenTelemetryBaggage() {
-        assertSame(NoopBaggageFactory, NoopOpenTelemetry.baggage)
-        assertSame(NoopBaggage, NoopOpenTelemetry.baggage.create { put("k", "v") })
+        assertSame(createNoopPropagator(), NoopOpenTelemetry.propagator)
     }
 
     @Test
@@ -317,6 +283,36 @@ internal class NoopTests {
         assertFalse(doubleCounter.enabled())
         doubleCounter.add(1.0)
         doubleCounter.add(-1.0) { setStringAttribute("account.type", "commercial") }
+    }
+
+    @OptIn(ExperimentalApi::class)
+    @Test
+    fun testNoopObservableLongMeasurement() {
+        val noopObservableLongMeasurement = NoopObservableLongMeasurement()
+        var attributesCalled = false
+
+        noopObservableLongMeasurement.record(1)
+        noopObservableLongMeasurement.record(1) {
+            attributesCalled = true
+            setStringAttribute("account.type", "commercial")
+        }
+
+        assertFalse(attributesCalled)
+    }
+
+    @OptIn(ExperimentalApi::class)
+    @Test
+    fun testNoopObservableDoubleMeasurement() {
+        val noopObservableDoubleMeasurement = NoopObservableDoubleMeasurement()
+        var attributesCalled = false
+
+        noopObservableDoubleMeasurement.record(1.5)
+        noopObservableDoubleMeasurement.record(1.5) {
+            attributesCalled = true
+            setStringAttribute("account.type", "commercial")
+        }
+
+        assertFalse(attributesCalled)
     }
 
     private fun verifySpanOperationsAreNoop(span: NoopSpan) {

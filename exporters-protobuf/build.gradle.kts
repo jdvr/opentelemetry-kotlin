@@ -52,6 +52,7 @@ kotlin {
             dependencies {
                 implementation(project(":sdk-api"))
                 implementation(project(":sdk-common"))
+                implementation(project(":propagation-utils"))
                 implementation(project(":api-ext"))
                 implementation(libs.wire.runtime)
             }
@@ -59,8 +60,6 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(project(":test-fakes"))
-                implementation(libs.kotlin.test.common)
-                implementation(libs.kotlin.test.common.annotations)
             }
         }
     }

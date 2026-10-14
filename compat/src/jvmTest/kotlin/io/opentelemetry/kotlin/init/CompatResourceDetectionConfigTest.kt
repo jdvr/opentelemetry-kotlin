@@ -1,11 +1,19 @@
 package io.opentelemetry.kotlin.init
 
+import io.opentelemetry.kotlin.SdkBuildKonfig
+import io.opentelemetry.kotlin.behavior.BehaviorResolverImpl
 import io.opentelemetry.kotlin.behavior.OpenTelemetryBehavior
+import io.opentelemetry.kotlin.behavior.ResourceBehavior
 import io.opentelemetry.kotlin.clock.FakeClock
 import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.factory.CompatContextFactory
 import io.opentelemetry.kotlin.resource.FakeResourceDetector
+import io.opentelemetry.kotlin.resource.SDK_DEFAULT_SERVICE_NAME
+import io.opentelemetry.kotlin.resource.SdkMode
+import io.opentelemetry.kotlin.resource.TELEMETRY_SDK_MODE
+import io.opentelemetry.kotlin.semconv.SemconvBuildKonfig
 import io.opentelemetry.kotlin.semconv.ServiceAttributes
+import io.opentelemetry.kotlin.semconv.TelemetryAttributes
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -15,6 +23,38 @@ internal class CompatResourceDetectionConfigTest {
     private val testKey = "test.key"
 
     @Test
+    fun `sdk defaults are present without any configuration`() {
+        val resource = baseResource(CompatOpenTelemetryConfig(clock))
+        assertEquals("opentelemetry", resource.attributes[TelemetryAttributes.TELEMETRY_SDK_NAME])
+        assertEquals("kotlin", resource.attributes[TelemetryAttributes.TELEMETRY_SDK_LANGUAGE])
+        assertEquals(SdkBuildKonfig.SDK_VERSION, resource.attributes[TelemetryAttributes.TELEMETRY_SDK_VERSION])
+        assertEquals(SDK_DEFAULT_SERVICE_NAME, resource.attributes[ServiceAttributes.SERVICE_NAME])
+        assertEquals(SdkMode.COMPAT.attributeValue, resource.attributes[TELEMETRY_SDK_MODE])
+        assertEquals(SemconvBuildKonfig.SCHEMA_URL, resource.schemaUrl)
+    }
+
+    @Test
+    fun `detected and explicit attributes override sdk defaults`() {
+        val cfg = CompatOpenTelemetryConfig(clock)
+        cfg.resourceDetection {
+            detector(FakeResourceDetector(attributes = mapOf(ServiceAttributes.SERVICE_NAME to "detected")))
+        }
+        cfg.resource(mapOf(TelemetryAttributes.TELEMETRY_SDK_NAME to "custom-sdk"))
+
+        val resource = baseResource(cfg)
+        assertEquals("detected", resource.attributes[ServiceAttributes.SERVICE_NAME])
+        assertEquals("custom-sdk", resource.attributes[TelemetryAttributes.TELEMETRY_SDK_NAME])
+        assertEquals("kotlin", resource.attributes[TelemetryAttributes.TELEMETRY_SDK_LANGUAGE])
+    }
+
+    @Test
+    fun `explicit schema url overrides sdk default`() {
+        val cfg = CompatOpenTelemetryConfig(clock)
+        cfg.resource("https://example.com/schema") { }
+        assertEquals("https://example.com/schema", baseResource(cfg).schemaUrl)
+    }
+
+    @Test
     fun `detected attributes reach the global resource`() {
         val cfg = CompatOpenTelemetryConfig(clock)
         cfg.resourceDetection {
@@ -22,6 +62,39 @@ internal class CompatResourceDetectionConfigTest {
         }
 
         assertEquals("detected", baseResource(cfg).attributes[testKey])
+    }
+
+    @Test
+    fun `resolved behavior resource overrides detected attributes`() {
+        val cfg = CompatOpenTelemetryConfig(clock)
+        cfg.resourceDetection {
+            detector(FakeResourceDetector(attributes = mapOf(testKey to "detected")))
+        }
+        val behavior = OpenTelemetryBehavior(
+            resource = ResourceBehavior(attributes = mapOf(testKey to "configured")),
+        )
+
+        val resource = CompatSdkConfigFactory(cfg, behavior, clock, CompatContextFactory()).baseResource
+
+        assertEquals("configured", resource.attributes[testKey])
+    }
+
+    @Test
+    fun `dsl service name attribute overrides environment service name`() {
+        val cfg = CompatOpenTelemetryConfig(clock).apply {
+            resource(mapOf(ServiceAttributes.SERVICE_NAME to "dsl-service"))
+        }
+        val behavior = BehaviorResolverImpl().resolve(
+            envars = OpenTelemetryBehavior(
+                resource = ResourceBehavior(serviceName = "environment-service"),
+            ),
+            declarativeFile = null,
+            dsl = cfg.toBehavior(),
+        )
+
+        val resource = CompatSdkConfigFactory(cfg, behavior, clock, CompatContextFactory()).baseResource
+
+        assertEquals("dsl-service", resource.attributes[ServiceAttributes.SERVICE_NAME])
     }
 
     @Test
@@ -71,5 +144,5 @@ internal class CompatResourceDetectionConfigTest {
     }
 
     private fun baseResource(cfg: CompatOpenTelemetryConfig) =
-        CompatSdkConfigFactory(cfg, OpenTelemetryBehavior(), clock, CompatContextFactory()).baseResource
+        CompatSdkConfigFactory(cfg, cfg.toBehavior(), clock, CompatContextFactory()).baseResource
 }

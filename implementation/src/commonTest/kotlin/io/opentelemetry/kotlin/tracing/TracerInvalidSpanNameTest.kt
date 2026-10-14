@@ -8,11 +8,7 @@ import io.opentelemetry.kotlin.factory.ContextFactory
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.IdGenerator
 import io.opentelemetry.kotlin.factory.IdGeneratorImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactory
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import kotlin.test.BeforeTest
@@ -25,7 +21,6 @@ internal class TracerInvalidSpanNameTest {
     private val key = InstrumentationScopeInfoImpl("test-tracer", null, null, emptyMap())
     private lateinit var clock: FakeClock
     private lateinit var contextFactory: ContextFactory
-    private lateinit var spanContextFactory: SpanContextFactory
     private lateinit var idGenerator: IdGenerator
     private lateinit var processor: FakeSpanProcessor
 
@@ -33,10 +28,7 @@ internal class TracerInvalidSpanNameTest {
     fun setUp() {
         clock = FakeClock()
         idGenerator = IdGeneratorImpl()
-        val traceFlags = TraceFlagsFactoryImpl()
-        val traceState = TraceStateFactoryImpl()
-        spanContextFactory = SpanContextFactoryImpl(traceFlags, traceState)
-        contextFactory = ContextFactoryImpl(SpanFactoryImpl(spanContextFactory))
+        contextFactory = ContextFactoryImpl(SpanFactoryImpl())
         processor = FakeSpanProcessor()
     }
 
@@ -62,8 +54,6 @@ internal class TracerInvalidSpanNameTest {
         clock = clock,
         processor = processor,
         contextFactory = contextFactory,
-        spanContextFactory = spanContextFactory,
-        traceFlagsFactory = TraceFlagsFactoryImpl(),
         scope = key,
         resource = FakeResource(),
         spanLimitConfig = fakeSpanLimitsConfig,

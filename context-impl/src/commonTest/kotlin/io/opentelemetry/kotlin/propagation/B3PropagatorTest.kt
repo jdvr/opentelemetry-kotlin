@@ -1,13 +1,10 @@
 package io.opentelemetry.kotlin.propagation
 
 import io.opentelemetry.kotlin.ExperimentalApi
-import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.SpanContextFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceFlagsFactoryImpl
-import io.opentelemetry.kotlin.factory.TraceStateFactoryImpl
 import io.opentelemetry.kotlin.init.B3Format
+import io.opentelemetry.kotlin.tracing.createSpanContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,16 +15,13 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalApi::class)
 internal class B3PropagatorTest {
 
-    private val traceFlagsFactory = TraceFlagsFactoryImpl()
-    private val traceStateFactory = TraceStateFactoryImpl()
-    private val spanContextFactory = SpanContextFactoryImpl(traceFlagsFactory, traceStateFactory)
-    private val spanFactory = SpanFactoryImpl(spanContextFactory)
+    private val spanFactory = SpanFactoryImpl()
     private val contextFactory = ContextFactoryImpl(spanFactory)
 
     private val singlePropagator =
-        B3Propagator(B3Format.SINGLE, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory, NoopSdkErrorHandler)
+        B3Propagator(B3Format.SINGLE)
     private val multiPropagator =
-        B3Propagator(B3Format.MULTI, traceFlagsFactory, traceStateFactory, spanContextFactory, spanFactory, NoopSdkErrorHandler)
+        B3Propagator(B3Format.MULTI)
 
     private val traceId = "0af7651916cd43dd8448eb211c80319c"
     private val spanId = "b7ad6b7169203331"
@@ -57,7 +51,7 @@ internal class B3PropagatorTest {
 
     @Test
     fun `inject single writes d flag when debug context is set`() {
-        val spanContext = spanContextFactory.create(traceId, spanId, traceFlagsFactory.fromHex("01"), traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = true }
         val ctx = contextFactory.root()
             .storeSpan(spanFactory.fromSpanContext(spanContext))
             .set(B3Propagator.DEBUG_CONTEXT_KEY, true)
@@ -88,7 +82,7 @@ internal class B3PropagatorTest {
 
     @Test
     fun `inject multi writes X-B3-Flags 1 and sampled 1 when debug`() {
-        val spanContext = spanContextFactory.create(traceId, spanId, traceFlagsFactory.fromHex("01"), traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = true }
         val ctx = contextFactory.root()
             .storeSpan(spanFactory.fromSpanContext(spanContext))
             .set(B3Propagator.DEBUG_CONTEXT_KEY, true)
@@ -234,6 +228,32 @@ internal class B3PropagatorTest {
     }
 
     @Test
+    fun `extract multi returns original context for invalid traceId`() {
+        val ctx = contextFactory.root()
+        assertSame(
+            ctx,
+            multiPropagator.extract(
+                ctx,
+                mapOf("X-B3-TraceId" to "not-a-valid-trace-id", "X-B3-SpanId" to spanId),
+                FakeTextMapGetter,
+            )
+        )
+    }
+
+    @Test
+    fun `extract multi returns original context for invalid spanId`() {
+        val ctx = contextFactory.root()
+        assertSame(
+            ctx,
+            multiPropagator.extract(
+                ctx,
+                mapOf("X-B3-TraceId" to traceId, "X-B3-SpanId" to "short"),
+                FakeTextMapGetter,
+            )
+        )
+    }
+
+    @Test
     fun `single header takes precedence over multi when both present`() {
         val spanId2 = "a1b2c3d4e5f60001"
         val carrier = mapOf(
@@ -289,7 +309,7 @@ internal class B3PropagatorTest {
 
     @Test
     fun `debug flag survives single inject then extract`() {
-        val spanContext = spanContextFactory.create(traceId, spanId, traceFlagsFactory.fromHex("01"), traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = true }
         val inCtx = contextFactory.root()
             .storeSpan(spanFactory.fromSpanContext(spanContext))
             .set(B3Propagator.DEBUG_CONTEXT_KEY, true)
@@ -302,7 +322,7 @@ internal class B3PropagatorTest {
 
     @Test
     fun `debug flag survives multi inject then extract`() {
-        val spanContext = spanContextFactory.create(traceId, spanId, traceFlagsFactory.fromHex("01"), traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = true }
         val inCtx = contextFactory.root()
             .storeSpan(spanFactory.fromSpanContext(spanContext))
             .set(B3Propagator.DEBUG_CONTEXT_KEY, true)
@@ -314,15 +334,13 @@ internal class B3PropagatorTest {
     }
 
     private fun injectSingle(sampled: Boolean): MutableMap<String, String> {
-        val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
-        val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = sampled }
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))
         return mutableMapOf<String, String>().also { singlePropagator.inject(ctx, it, FakeTextMapSetter) }
     }
 
     private fun injectMulti(sampled: Boolean): MutableMap<String, String> {
-        val flags = if (sampled) { traceFlagsFactory.fromHex("01") } else { traceFlagsFactory.fromHex("00") }
-        val spanContext = spanContextFactory.create(traceId, spanId, flags, traceStateFactory.default, false)
+        val spanContext = createSpanContext(traceId, spanId) { isSampled = sampled }
         val ctx = contextFactory.root().storeSpan(spanFactory.fromSpanContext(spanContext))
         return mutableMapOf<String, String>().also { multiPropagator.inject(ctx, it, FakeTextMapSetter) }
     }

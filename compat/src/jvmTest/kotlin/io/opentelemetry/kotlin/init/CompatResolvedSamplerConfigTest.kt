@@ -4,15 +4,15 @@ import io.opentelemetry.kotlin.behavior.OpenTelemetryBehavior
 import io.opentelemetry.kotlin.behavior.SamplerBehavior
 import io.opentelemetry.kotlin.behavior.TracerProviderBehavior
 import io.opentelemetry.kotlin.clock.FakeClock
-import io.opentelemetry.kotlin.config.envar.EnvVarReader
+import io.opentelemetry.kotlin.config.envar.reader.EnvVarReader
 import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.error.SdkErrorSeverity
 import io.opentelemetry.kotlin.factory.CompatContextFactory
 import io.opentelemetry.kotlin.tracing.Span
+import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import io.opentelemetry.kotlin.tracing.sampling.FakeSampler
 import io.opentelemetry.kotlin.tracing.sampling.SamplingResult
-import io.opentelemetry.kotlin.tracing.sampling.alwaysOn
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -34,12 +34,15 @@ internal class CompatResolvedSamplerConfigTest {
             if (errorHandler != null) {
                 errorHandler(errorHandler)
             }
-            tracerProvider(configure)
+            tracerProvider {
+                export { FakeSpanProcessor() }
+                configure()
+            }
         }
         val behavior = resolved ?: defaultCompatBehaviorReader(
             envVarReader = EnvVarReader(getEnvVar),
             sdkErrorHandler = cfg.sdkErrorHandler,
-        ).read(cfg.configFilePath, cfg.toBehavior())
+        ).read(cfg.configFilePath, cfg::toBehavior)
         return CompatSdkConfigFactory(cfg, behavior, clock, contextFactory)
             .buildTracerProvider()
             .getTracer("test")

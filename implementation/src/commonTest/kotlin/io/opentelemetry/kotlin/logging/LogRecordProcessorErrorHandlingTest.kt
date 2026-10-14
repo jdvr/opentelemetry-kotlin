@@ -6,10 +6,10 @@ import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.error.SdkErrorSeverity
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
 import io.opentelemetry.kotlin.logging.export.FakeLogRecordProcessor
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.fakeLogLimitsConfig
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,7 +30,6 @@ internal class LogRecordProcessorErrorHandlingTest {
             clock = FakeClock(),
             processor = processor,
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
             key = key,
             resource = FakeResource(),
             logLimits = fakeLogLimitsConfig,
@@ -58,6 +57,14 @@ internal class LogRecordProcessorErrorHandlingTest {
 
         assertEquals(2, errorHandler.userCodeErrors.size)
         assertEquals(2, processor.logs.size)
+    }
+
+    @Test
+    fun testOnEmitThrowsCancellationExceptionIsContained() {
+        processor.action = { _, _ -> throw CancellationException("boom") }
+        logger.emit("message")
+        assertTrue(errorHandler.userCodeErrors.single().cause is CancellationException)
+        assertEquals(1, processor.logs.size)
     }
 
     @Test

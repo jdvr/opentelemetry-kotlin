@@ -1,13 +1,17 @@
 package io.opentelemetry.kotlin.config.envar.tracing
 
 import io.opentelemetry.kotlin.behavior.ConsoleExporterBehavior
+import io.opentelemetry.kotlin.behavior.OtlpHttpSpanExporterBehavior
 import io.opentelemetry.kotlin.behavior.SpanProcessorBehavior
-import io.opentelemetry.kotlin.config.envar.EnvVarReader
+import io.opentelemetry.kotlin.config.envar.Exporter
+import io.opentelemetry.kotlin.config.envar.reader.EnvVarReadWarning
+import io.opentelemetry.kotlin.config.envar.reader.reportingEnvVarReader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 internal class TracesExporterEnvVarsTest {
+    private val unknownExporter = "not_an_exporter"
 
     @Test
     fun `should leave unset env vars unset`() {
@@ -15,57 +19,65 @@ internal class TracesExporterEnvVarsTest {
     }
 
     @Test
-    fun `should map console`() {
+    fun `should map implemented exporters`() {
+        var configs = mapOf(
+            TracesExporterEnvVars.TRACES_EXPORTER to Exporter.CONSOLE.value
+        )
         assertEquals(
             SpanProcessorBehavior(console = ConsoleExporterBehavior()),
-            toBehavior(env("console")),
+            toBehavior(configs::get),
+        )
+
+        configs = mapOf(
+            TracesExporterEnvVars.TRACES_EXPORTER to Exporter.OTLP.value,
+        )
+        assertEquals(
+            SpanProcessorBehavior(http = OtlpHttpSpanExporterBehavior()),
+            toBehavior(configs::get)
         )
     }
 
     @Test
-    fun `should leave known non-console exporters unset`() {
-        listOf("otlp", "logging", "none", "otlp/stdout", "").forEach { name ->
-            assertNull(toBehavior(env(name)), "<$name> should not configure a processor")
+    fun `should leave known non-implemented exporters unset`() {
+        val exporters = listOf(Exporter.LOGGING, Exporter.NONE, Exporter.OTLP_STDOUT)
+        exporters.forEach { exporter ->
+            assertNull(
+                toBehavior(mapOf(TracesExporterEnvVars.TRACES_EXPORTER to exporter.value)::get),
+                "<$exporter> should not configure a processor"
+            )
         }
     }
 
     @Test
     fun `should leave unknown exporter unset`() {
-        listOf("not_an_exporter", "zipkin").forEach { name ->
-            assertNull(toBehavior(env(name)), "<$name> should not configure a processor")
-        }
+        val configs = mapOf(TracesExporterEnvVars.TRACES_EXPORTER to unknownExporter)
+        assertNull(toBehavior(configs::get))
     }
 
     @Test
     fun `should warn on unknown exporter`() {
-        listOf("not_an_exporter", "zipkin").forEach { name ->
-            val warnings = mutableListOf<String>()
-            TracesExporterEnvVars(EnvVarReader(env(name)), warnings::add).toBehavior()
-            assertEquals(1, warnings.size, "<$name> should warn")
-        }
+        val configs = mapOf(TracesExporterEnvVars.TRACES_EXPORTER to unknownExporter)
+        val warnings = mutableListOf<EnvVarReadWarning>()
+        TracesExporterEnvVars(reportingEnvVarReader(configs::get, warnings::add)).toBehavior()
+        assertEquals(1, warnings.size)
+        assertEquals(TracesExporterEnvVars.TRACES_EXPORTER, warnings.single().name)
     }
 
     @Test
     fun `should not warn when exporter is unset`() {
-        val warnings = mutableListOf<String>()
-        TracesExporterEnvVars(EnvVarReader { null }, warnings::add).toBehavior()
+        val warnings = mutableListOf<EnvVarReadWarning>()
+        TracesExporterEnvVars(reportingEnvVarReader({ null }, warnings::add)).toBehavior()
         assertEquals(emptyList(), warnings)
     }
 
     @Test
-    fun `should not warn on known non-console exporters`() {
-        val warnings = mutableListOf<String>()
-        TracesExporterEnvVars(EnvVarReader(env("otlp")), warnings::add).toBehavior()
+    fun `should not warn on known non-implemented exporters`() {
+        val configs = mapOf(TracesExporterEnvVars.TRACES_EXPORTER to Exporter.OTLP.value)
+        val warnings = mutableListOf<EnvVarReadWarning>()
+        TracesExporterEnvVars(reportingEnvVarReader(configs::get, warnings::add)).toBehavior()
         assertEquals(emptyList(), warnings)
     }
 
-    private fun env(exporter: String): (String) -> String? {
-        val values = buildMap {
-            put("OTEL_TRACES_EXPORTER", exporter)
-        }
-        return values::get
-    }
-
     private fun toBehavior(getEnvVar: (String) -> String?) =
-        TracesExporterEnvVars(EnvVarReader(getEnvVar)).toBehavior()
+        TracesExporterEnvVars(reportingEnvVarReader(getEnvVar)).toBehavior()
 }

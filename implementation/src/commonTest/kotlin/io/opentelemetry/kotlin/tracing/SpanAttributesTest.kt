@@ -7,8 +7,6 @@ import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
-import io.opentelemetry.kotlin.factory.FakeSpanContextFactory
-import io.opentelemetry.kotlin.factory.FakeTraceFlagsFactory
 import io.opentelemetry.kotlin.init.config.SpanLimitConfig
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
@@ -49,8 +47,6 @@ internal class SpanAttributesTest {
             clock = FakeClock(),
             processor = FakeSpanProcessor(),
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
-            traceFlagsFactory = FakeTraceFlagsFactory(),
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = spanLimitConfig,
@@ -73,6 +69,18 @@ internal class SpanAttributesTest {
     fun testSpanAddAttributesDuringCreation() {
         val span = tracer.startSpan("test") { addTestAttributes() }
         assertEquals(expected, (span.toReadableSpan()).attributes)
+    }
+
+    @Test
+    fun testWholeDoubleAttributesPreservedDuringCreation() {
+        val span = tracer.startSpan("test") {
+            setDoubleAttribute("double", 2.0)
+            setDoubleListAttribute("double_list", listOf(1.0, 2.0))
+        }
+        assertEquals(
+            mapOf("double" to 2.0, "double_list" to listOf(1.0, 2.0)),
+            span.toReadableSpan().attributes
+        )
     }
 
     @Test
@@ -219,8 +227,6 @@ internal class SpanAttributesTest {
             clock = FakeClock(),
             processor = FakeSpanProcessor(),
             contextFactory = FakeContextFactory(),
-            spanContextFactory = FakeSpanContextFactory(),
-            traceFlagsFactory = FakeTraceFlagsFactory(),
             scope = key,
             resource = FakeResource(),
             spanLimitConfig = config,

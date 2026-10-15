@@ -14,6 +14,8 @@ private const val INSTRUMENTATION_KEY = "instrumentation"
  * Reads the raw `.instrumentation` mapping node out of the declarative config file at [path],
  * for later use as a [io.opentelemetry.kotlin.config.ConfigProperties] source. Returns `null`
  * if the document is not a mapping, the key is absent, or its value is not itself a mapping.
+ *
+ * Throws if the file cannot be read, or does not hold valid YAML.
  */
 @ExperimentalApi
 fun readInstrumentationNode(
@@ -26,7 +28,6 @@ fun readInstrumentationNode(
  * Reads the raw `.instrumentation` mapping node out of a YAML document given as [yaml]. See
  * [readInstrumentationNode] for semantics.
  */
-@ExperimentalApi
 internal fun readInstrumentationNode(
     yaml: String,
     parser: YamlConfigParser = YamlConfigParser(),

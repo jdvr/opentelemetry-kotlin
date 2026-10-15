@@ -53,6 +53,15 @@ internal class MapConfigPropertiesTest {
     }
 
     @Test
+    fun numbersThatAreNotWholeLongsAreNotLongs() {
+        val properties = MapConfigProperties(mapOf("big" to 1e30, "nan" to Double.NaN, "inf" to Double.POSITIVE_INFINITY))
+        assertNull(properties.getLong("big"))
+        assertNull(properties.getLong("nan"))
+        assertNull(properties.getLong("inf"))
+        assertEquals(1e30, properties.getDouble("big"))
+    }
+
+    @Test
     fun mappingsAndSequencesAreNotScalars() {
         val properties = MapConfigProperties(mapOf("m" to mapOf("a" to 1), "l" to listOf(1)))
         assertNull(properties.getString("m"))
@@ -78,10 +87,20 @@ internal class MapConfigPropertiesTest {
     }
 
     @Test
-    fun sequenceWithAnyMistypedElementReturnsNull() {
-        val properties = MapConfigProperties(mapOf("list" to listOf(1, "two", 3), "nested" to listOf("a", listOf("b"))))
+    fun sequenceWithAnyMistypedOrNullElementReturnsNull() {
+        val properties = MapConfigProperties(
+            mapOf("list" to listOf(1, "two", 3), "nested" to listOf("a", listOf("b")), "nulls" to listOf("a", null))
+        )
         assertNull(properties.getLongList("list"))
         assertNull(properties.getStringList("nested"))
+        assertNull(properties.getStringList("nulls"))
+    }
+
+    @Test
+    fun emptySequenceIsEmpty() {
+        val properties = MapConfigProperties(mapOf("list" to emptyList<Any>()))
+        assertEquals(emptyList(), properties.getStringList("list"))
+        assertEquals(emptyList(), properties.getStructuredList("list"))
     }
 
     @Test
@@ -102,10 +121,19 @@ internal class MapConfigPropertiesTest {
     }
 
     @Test
-    fun nonStringMappingKeysAreIgnored() {
-        val nested: Map<*, *> = mapOf(1 to "one", "key" to "value")
+    fun scalarMappingKeysAreReadAsStrings() {
+        val nested: Map<*, *> = mapOf(1 to "one", true to "yes", "key" to "value", listOf(1) to "dropped")
         val child = MapConfigProperties(mapOf("child" to nested)).getStructured("child")
-        assertEquals(setOf("key"), child?.propertyKeys)
+        assertEquals(setOf("1", "true", "key"), child?.propertyKeys)
+        assertEquals("one", child?.getString("1"))
+    }
+
+    @Test
+    fun convertedNodeIsNotAffectedByLaterChanges() {
+        val node = mutableMapOf<String, Any?>("key" to "value")
+        val properties = node.toConfigProperties()
+        node["other"] = "value"
+        assertEquals(setOf("key"), properties.propertyKeys)
     }
 
     @Test

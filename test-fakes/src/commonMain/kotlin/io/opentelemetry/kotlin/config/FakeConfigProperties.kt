@@ -1,5 +1,9 @@
 package io.opentelemetry.kotlin.config
 
+/**
+ * Returns a stored value only if it has the requested type, except that any number can be read as a
+ * double.
+ */
 class FakeConfigProperties(val map: MutableMap<String, Any?> = mutableMapOf()) : ConfigProperties {
 
     override fun getString(name: String): String? = map[name] as? String
@@ -8,7 +12,7 @@ class FakeConfigProperties(val map: MutableMap<String, Any?> = mutableMapOf()) :
 
     override fun getLong(name: String): Long? = map[name] as? Long
 
-    override fun getDouble(name: String): Double? = map[name] as? Double
+    override fun getDouble(name: String): Double? = (map[name] as? Number)?.toDouble()
 
     override fun getStringList(name: String): List<String>? = getList(name)
 
@@ -16,7 +20,7 @@ class FakeConfigProperties(val map: MutableMap<String, Any?> = mutableMapOf()) :
 
     override fun getLongList(name: String): List<Long>? = getList(name)
 
-    override fun getDoubleList(name: String): List<Double>? = getList(name)
+    override fun getDoubleList(name: String): List<Double>? = getList<Number>(name)?.map { it.toDouble() }
 
     override fun getStructured(name: String): ConfigProperties? = map[name] as? ConfigProperties
 

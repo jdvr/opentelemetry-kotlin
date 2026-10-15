@@ -4,6 +4,7 @@ import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 internal class InstrumentationNodeReaderTest {
@@ -41,6 +42,11 @@ internal class InstrumentationNodeReaderTest {
 
         val result = readInstrumentationNode(fileSystem, path)
         assertEquals(setOf("general"), result?.keys)
+    }
+
+    @Test
+    fun missingFileThrows() {
+        assertFailsWith<Exception> { readInstrumentationNode(FakeFileSystem(), "missing.yaml".toPath()) }
     }
 
     @Test

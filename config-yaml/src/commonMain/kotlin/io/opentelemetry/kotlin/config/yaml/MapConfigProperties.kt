@@ -6,116 +6,76 @@ import io.opentelemetry.kotlin.config.ConfigProperties
 /**
  * A [ConfigProperties] view over a raw mapping node produced by [YamlConfigParser].
  *
- * Accessors are defensive on purpose: this SDK is embedded in host applications, so a
- * malformed or unexpectedly-typed value must degrade to `null` rather than throw. Numeric and
- * boolean getters accept both a [Number]/[Boolean] value (what yamlkt is observed to produce
- * today) and a parseable [String], so this class keeps working across a yamlkt upgrade that
- * changes its internal representation.
+ * Getters return `null` when a property is absent, set to `null`, or not of the requested type.
+ * Any scalar can be read as a string, any number as a double, and a whole number as a long; no
+ * other conversions are made. A sequence is only returned if every element has the requested type.
  *
- * Known limitation: the
- * [declarative configuration spec](https://opentelemetry.io/docs/specs/otel/configuration/api/)
- * asks implementations to let callers distinguish a property that is present with a `null`
- * value from one that is absent entirely. The [ConfigProperties] interface returns `T?`
- * uniformly for both cases, so [propertyKeys] is currently the only way to tell them apart.
- * This is a known limitation left to a follow-up.
+ * A property set to `null` is still listed in [propertyKeys], which is how callers tell it apart
+ * from a property that is not set.
  */
 @ExperimentalApi
-class MapConfigProperties(private val node: Map<String, Any?>) : ConfigProperties {
+internal class MapConfigProperties(private val node: Map<String, Any?>) : ConfigProperties {
 
-    override fun getString(name: String): String? =
-        when (val value = node[name]) {
-            null -> null
-            is String -> value
-            is Map<*, *>, is List<*> -> null
-            else -> value.toString()
-        }
+    override fun getString(name: String): String? = asString(node[name])
 
-    override fun getBoolean(name: String): Boolean? = asBoolean(node[name])
+    override fun getBoolean(name: String): Boolean? = node[name] as? Boolean
 
     override fun getLong(name: String): Long? = asLong(node[name])
 
     override fun getDouble(name: String): Double? = asDouble(node[name])
 
-    override fun getStringList(name: String): List<String>? =
-        asList(node[name])?.mapNotNull { element ->
-            when (element) {
-                null -> null
-                is String -> element
-                is Map<*, *>, is List<*> -> null
-                else -> element.toString()
-            }
-        }
+    override fun getStringList(name: String): List<String>? = getList(name, ::asString)
 
-    override fun getBooleanList(name: String): List<Boolean>? =
-        asList(node[name])?.mapNotNull(::asBoolean)
+    override fun getBooleanList(name: String): List<Boolean>? = getList(name) { it as? Boolean }
 
-    override fun getLongList(name: String): List<Long>? =
-        asList(node[name])?.mapNotNull(::asLong)
+    override fun getLongList(name: String): List<Long>? = getList(name, ::asLong)
 
-    override fun getDoubleList(name: String): List<Double>? =
-        asList(node[name])?.mapNotNull(::asDouble)
+    override fun getDoubleList(name: String): List<Double>? = getList(name, ::asDouble)
 
-    override fun getStructured(name: String): ConfigProperties? =
-        asMap(node[name])?.let(::MapConfigProperties)
+    override fun getStructured(name: String): ConfigProperties? = asStructured(node[name])
 
-    override fun getStructuredList(name: String): List<ConfigProperties>? =
-        asList(node[name])?.mapNotNull { element -> asMap(element)?.let(::MapConfigProperties) }
+    override fun getStructuredList(name: String): List<ConfigProperties>? = getList(name, ::asStructured)
 
     override val propertyKeys: Set<String>
         get() = node.keys
 
-    private fun asList(value: Any?): List<*>? = value as? List<*>
-
-    companion object {
-        /** The empty [ConfigProperties] used when a mapping node is absent. */
-        val EMPTY: ConfigProperties = MapConfigProperties(emptyMap())
-
-        private fun asBoolean(value: Any?): Boolean? =
-            when (value) {
-                is Boolean -> value
-                is String ->
-                    when (value.lowercase()) {
-                        "true" -> true
-                        "false" -> false
-                        else -> null
-                    }
-                else -> null
-            }
-
-        private fun asLong(value: Any?): Long? =
-            when (value) {
-                is Number -> value.toLong()
-                is String -> value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong()
-                else -> null
-            }
-
-        private fun asDouble(value: Any?): Double? =
-            when (value) {
-                is Number -> value.toDouble()
-                is String -> value.toDoubleOrNull()
-                else -> null
-            }
-
-        /**
-         * Converts [value] to a `Map<String, Any?>` if it is a mapping node, dropping any
-         * entries whose key is not a [String] rather than performing an unchecked cast.
-         */
-        private fun asMap(value: Any?): Map<String, Any?>? =
-            (value as? Map<*, *>)?.toStringKeyedMap()
+    private inline fun <T : Any> getList(name: String, convert: (Any?) -> T?): List<T>? {
+        val list = node[name] as? List<*> ?: return null
+        return list.map { convert(it) ?: return null }
     }
+
+    // yamlkt does not reliably keep a quoted scalar as a string, so its text is used instead.
+    private fun asString(value: Any?): String? = when (value) {
+        is String -> value
+        is Number, is Boolean -> value.toString()
+        else -> null
+    }
+
+    // Kotlin/JS cannot tell number types apart, so whole numbers are detected by value.
+    private fun asLong(value: Any?): Long? = when (value) {
+        is Long -> value
+        is Number -> value.toDouble().takeIf { it % 1.0 == 0.0 }?.toLong()
+        else -> null
+    }
+
+    private fun asDouble(value: Any?): Double? = (value as? Number)?.toDouble()
+
+    private fun asStructured(value: Any?): ConfigProperties? =
+        (value as? Map<*, *>)?.toStringKeyedMap()?.let(::MapConfigProperties)
 }
 
-/**
- * Converts a raw `Map<*, *>` into a `Map<String, Any?>`, keeping only entries whose key is a
- * [String] rather than performing an unchecked cast that could throw.
- */
-fun Map<*, *>.toStringKeyedMap(): Map<String, Any?> =
-    entries.mapNotNull { (key, value) -> (key as? String)?.let { it to value } }.toMap()
+@ExperimentalApi
+private val EMPTY_CONFIG_PROPERTIES: ConfigProperties = MapConfigProperties(emptyMap())
 
 /**
- * Converts a nullable raw mapping node into a non-null [ConfigProperties], per the spec's
- * requirement that an absent `.instrumentation` node yield an empty [ConfigProperties] rather
- * than `null`.
+ * Returns a [ConfigProperties] for this mapping node, or an empty one if the node is absent.
  */
+@ExperimentalApi
 fun Map<String, Any?>?.toConfigProperties(): ConfigProperties =
-    this?.let(::MapConfigProperties) ?: MapConfigProperties.EMPTY
+    this?.let(::MapConfigProperties) ?: EMPTY_CONFIG_PROPERTIES
+
+/**
+ * Returns the entries of this map whose key is a [String], as YAML mapping keys need not be strings.
+ */
+internal fun Map<*, *>.toStringKeyedMap(): Map<String, Any?> =
+    entries.mapNotNull { (key, value) -> (key as? String)?.let { it to value } }.toMap()

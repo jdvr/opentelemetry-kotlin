@@ -5,10 +5,8 @@ import okio.FileSystem
 import okio.Path
 
 /**
- * The declarative-configuration key holding the instrumentation-library configuration section.
- *
- * Deliberately `instrumentation`, not `instrumentation/development` — the generated schema
- * model's `@SerialName("instrumentation/development")` is intentionally not used here.
+ * The mapping node returned by the ConfigProvider's get instrumentation config operation:
+ * https://opentelemetry.io/docs/specs/otel/configuration/api/#get-instrumentation-config
  */
 private const val INSTRUMENTATION_KEY = "instrumentation"
 
@@ -25,11 +23,11 @@ fun readInstrumentationNode(
 ): Map<String, Any?>? = extractInstrumentationNode(parser.parse(fileSystem, path))
 
 /**
- * Reads the raw `.instrumentation` mapping node out of a YAML document given as [yaml], for
- * testing without touching a file system. See [readInstrumentationNode] for semantics.
+ * Reads the raw `.instrumentation` mapping node out of a YAML document given as [yaml]. See
+ * [readInstrumentationNode] for semantics.
  */
 @ExperimentalApi
-fun readInstrumentationNode(
+internal fun readInstrumentationNode(
     yaml: String,
     parser: YamlConfigParser = YamlConfigParser(),
 ): Map<String, Any?>? = extractInstrumentationNode(parser.parse(yaml))

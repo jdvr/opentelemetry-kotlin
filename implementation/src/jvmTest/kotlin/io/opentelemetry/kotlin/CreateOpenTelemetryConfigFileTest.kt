@@ -53,7 +53,6 @@ internal class CreateOpenTelemetryConfigFileTest {
         val instrumentationConfig = otel.configProvider.instrumentationConfig
         assertEquals("bar", instrumentationConfig.getString("foo"))
         assertEquals(42L, instrumentationConfig.getStructured("nested")?.getLong("count"))
-        assertNotNull(instrumentationConfig.getStructured("nested"))
     }
 
     @Test

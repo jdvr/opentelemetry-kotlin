@@ -23,28 +23,12 @@ internal class InstrumentationNodeReaderTest {
     }
 
     @Test
-    fun missingInstrumentationKeyReturnsNull() {
-        assertNull(readInstrumentationNode("other: value"))
-    }
-
-    @Test
-    fun scalarInstrumentationValueReturnsNull() {
-        assertNull(readInstrumentationNode("instrumentation: enabled"))
-    }
-
-    @Test
-    fun listInstrumentationValueReturnsNull() {
-        assertNull(readInstrumentationNode("instrumentation: [a, b]"))
-    }
-
-    @Test
-    fun emptyDocumentReturnsNull() {
+    fun returnsNullWhenThereIsNoInstrumentationMapping() {
         assertNull(readInstrumentationNode(""))
-    }
-
-    @Test
-    fun bareScalarDocumentReturnsNull() {
         assertNull(readInstrumentationNode("just a string"))
+        assertNull(readInstrumentationNode("other: value"))
+        assertNull(readInstrumentationNode("instrumentation: enabled"))
+        assertNull(readInstrumentationNode("instrumentation: [a, b]"))
     }
 
     @Test
@@ -60,9 +44,7 @@ internal class InstrumentationNodeReaderTest {
     }
 
     @Test
-    fun instrumentationDevelopmentKeyIsNotUsed() {
-        // Deliberate: the generated schema model's @SerialName("instrumentation/development")
-        // is intentionally not consulted here, only the exact key "instrumentation".
+    fun onlyReadsTheInstrumentationKey() {
         assertNull(readInstrumentationNode("instrumentation/development:\n  general: {}"))
     }
 }

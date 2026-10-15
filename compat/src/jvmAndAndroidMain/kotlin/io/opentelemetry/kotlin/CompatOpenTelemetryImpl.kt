@@ -19,7 +19,6 @@ internal class CompatOpenTelemetryImpl(
     override val tracerProvider: TracerProvider,
     override val loggerProvider: LoggerProvider,
     override val meterProvider: MeterProvider,
-    override val configProvider: ConfigProvider,
     override val clock: Clock,
     override val context: ContextFactory,
     override val span: SpanFactory,
@@ -28,6 +27,9 @@ internal class CompatOpenTelemetryImpl(
     override val propagator: TextMapPropagator,
     sdkErrorHandler: SdkErrorHandler,
 ) : OpenTelemetrySdk {
+
+    // TODO: delegate to opentelemetry-java once it ships the Instrumentation Configuration API.
+    override val configProvider: ConfigProvider = NoopOpenTelemetry.configProvider
 
     private val shutdownState: MutableShutdownState = MutableShutdownState()
 

@@ -6,35 +6,27 @@ class FakeConfigProperties(val map: MutableMap<String, Any?> = mutableMapOf()) :
 
     override fun getBoolean(name: String): Boolean? = map[name] as? Boolean
 
-    override fun getLong(name: String): Long? = when (val value = map[name]) {
-        is Long -> value
-        is Int -> value.toLong()
-        else -> null
-    }
+    override fun getLong(name: String): Long? = map[name] as? Long
 
-    override fun getDouble(name: String): Double? = when (val value = map[name]) {
-        is Double -> value
-        is Number -> value.toDouble()
-        else -> null
-    }
+    override fun getDouble(name: String): Double? = map[name] as? Double
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getStringList(name: String): List<String>? = map[name] as? List<String>
+    override fun getStringList(name: String): List<String>? = getList(name)
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getBooleanList(name: String): List<Boolean>? = map[name] as? List<Boolean>
+    override fun getBooleanList(name: String): List<Boolean>? = getList(name)
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getLongList(name: String): List<Long>? = map[name] as? List<Long>
+    override fun getLongList(name: String): List<Long>? = getList(name)
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getDoubleList(name: String): List<Double>? = map[name] as? List<Double>
+    override fun getDoubleList(name: String): List<Double>? = getList(name)
 
     override fun getStructured(name: String): ConfigProperties? = map[name] as? ConfigProperties
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getStructuredList(name: String): List<ConfigProperties>? = map[name] as? List<ConfigProperties>
+    override fun getStructuredList(name: String): List<ConfigProperties>? = getList(name)
 
     override val propertyKeys: Set<String>
         get() = map.keys
+
+    private inline fun <reified T> getList(name: String): List<T>? {
+        val list = map[name] as? List<*> ?: return null
+        return list.filterIsInstance<T>().takeIf { it.size == list.size }
+    }
 }

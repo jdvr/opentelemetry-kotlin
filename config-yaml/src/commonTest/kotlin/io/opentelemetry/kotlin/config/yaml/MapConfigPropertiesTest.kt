@@ -54,7 +54,8 @@ internal class MapConfigPropertiesTest {
 
     @Test
     fun numbersThatAreNotWholeLongsAreNotLongs() {
-        val properties = MapConfigProperties(mapOf("big" to 1e30, "nan" to Double.NaN, "inf" to Double.POSITIVE_INFINITY))
+        val properties =
+            MapConfigProperties(mapOf("big" to 1e30, "nan" to Double.NaN, "inf" to Double.POSITIVE_INFINITY))
         assertNull(properties.getLong("big"))
         assertNull(properties.getLong("nan"))
         assertNull(properties.getLong("inf"))

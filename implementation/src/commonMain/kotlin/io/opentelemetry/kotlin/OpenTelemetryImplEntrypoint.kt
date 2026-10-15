@@ -3,8 +3,6 @@ package io.opentelemetry.kotlin
 import io.opentelemetry.kotlin.behavior.AttributeLimitsBehavior
 import io.opentelemetry.kotlin.behavior.LogLimitsBehavior
 import io.opentelemetry.kotlin.behavior.SpanLimitsBehavior
-import io.opentelemetry.kotlin.config.ConfigProviderImpl
-import io.opentelemetry.kotlin.config.yaml.toConfigProperties
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.ResourceFactoryImpl
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
@@ -67,7 +65,7 @@ public fun createOpenTelemetry(
             metricsConfig = metricsConfig,
             attributeLimits = behavior.attributeLimits ?: AttributeLimitsBehavior()
         ),
-        configProvider = ConfigProviderImpl(behavior.instrumentation.toConfigProperties()),
+        configProvider = NoopOpenTelemetry.configProvider,
         clock = clock,
         context = contextFactory,
         span = span,

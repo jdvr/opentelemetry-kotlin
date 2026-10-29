@@ -4,12 +4,10 @@ import io.opentelemetry.kotlin.attributes.AttributesModel
 import io.opentelemetry.kotlin.behavior.SamplerBehavior
 import io.opentelemetry.kotlin.context.Context
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.SpanFactoryImpl
 import io.opentelemetry.kotlin.factory.hexToByteArray
 import io.opentelemetry.kotlin.init.SamplerConfigImpl
-import io.opentelemetry.kotlin.tracing.NonRecordingSpan
 import io.opentelemetry.kotlin.tracing.SpanKind
-import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
+import io.opentelemetry.kotlin.tracing.createNonRecordingSpan
 import io.opentelemetry.kotlin.tracing.createSpanContext
 import io.opentelemetry.kotlin.tracing.sampling.SamplingResult.Decision
 import kotlin.test.Test
@@ -17,8 +15,7 @@ import kotlin.test.assertEquals
 
 internal class SamplerBehaviorMappingTest {
 
-    private val spanFactory = SpanFactoryImpl()
-    private val contextFactory = ContextFactoryImpl(spanFactory)
+    private val contextFactory = ContextFactoryImpl()
 
     private val samplerDsl = SamplerConfigImpl()
 
@@ -27,7 +24,7 @@ internal class SamplerBehaviorMappingTest {
             isSampled = sampled
             this.isRemote = isRemote
         }
-        val parentSpan = NonRecordingSpan(createInvalidSpanContext(), parentSpanContext)
+        val parentSpan = createNonRecordingSpan(parentSpanContext)
         return contextFactory.root().storeSpan(parentSpan)
     }
 

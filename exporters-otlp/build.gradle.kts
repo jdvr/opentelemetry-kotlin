@@ -23,6 +23,8 @@ kotlin {
                 implementation(project(":sdk-api"))
                 implementation(project(":sdk-common"))
                 implementation(project(":exporters-protobuf"))
+                implementation(project(":exporters-json"))
+                implementation(project(":serializable-models"))
                 implementation(project(":platform-implementations"))
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.cio)
@@ -40,6 +42,11 @@ kotlin {
         getByName("jvmAndAndroidMain") {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
+            }
+        }
+        linuxTest {
+            dependencies {
+                implementation(libs.ktor.network)
             }
         }
     }

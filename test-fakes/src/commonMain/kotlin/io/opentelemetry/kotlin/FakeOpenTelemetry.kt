@@ -8,10 +8,8 @@ import io.opentelemetry.kotlin.factory.ContextFactory
 import io.opentelemetry.kotlin.factory.FakeContextFactory
 import io.opentelemetry.kotlin.factory.FakeIdGenerator
 import io.opentelemetry.kotlin.factory.FakeResourceFactory
-import io.opentelemetry.kotlin.factory.FakeSpanFactory
 import io.opentelemetry.kotlin.factory.IdGenerator
 import io.opentelemetry.kotlin.factory.ResourceFactory
-import io.opentelemetry.kotlin.factory.SpanFactory
 import io.opentelemetry.kotlin.logging.FakeLoggerProvider
 import io.opentelemetry.kotlin.logging.LoggerProvider
 import io.opentelemetry.kotlin.metrics.FakeMeterProvider
@@ -28,7 +26,6 @@ class FakeOpenTelemetry : OpenTelemetrySdk {
     override val configProvider: ConfigProvider = FakeConfigProvider()
     override val clock: Clock = FakeClock()
     override val context: ContextFactory = FakeContextFactory()
-    override val span: SpanFactory = FakeSpanFactory()
     override val idGenerator: IdGenerator = FakeIdGenerator()
     override val resource: ResourceFactory = FakeResourceFactory()
     override val propagator: TextMapPropagator = FakeTextMapPropagator()

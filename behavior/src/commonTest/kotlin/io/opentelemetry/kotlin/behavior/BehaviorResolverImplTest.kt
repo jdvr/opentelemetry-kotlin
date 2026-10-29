@@ -25,7 +25,6 @@ internal class BehaviorResolverImplTest {
                 fileFormat = OpenTelemetryBehavior.DEFAULT_FILE_FORMAT_VERSION,
                 loggerProvider = LoggerProviderBehavior(
                     processor = LogRecordProcessorBehavior(
-                        http = http,
                         batch = BatchLogRecordProcessorBehavior(scheduleDelay = 1_000, maxQueueSize = 2_048),
                     ),
                 ),
@@ -41,19 +40,17 @@ internal class BehaviorResolverImplTest {
         )
 
         val processor = resolved.loggerProvider?.processor
-        assertEquals(http, processor?.http)
         assertEquals(BatchLogRecordProcessorBehavior(scheduleDelay = 0, maxQueueSize = 2_048), processor?.batch)
     }
 
     @Test
     fun dslSelectsSimpleProcessorAndPreservesDeclarativeExporter() {
-        val http = OtlpHttpLogsExporterBehavior(endpoint = "https://example.com")
         val resolved = resolver.resolve(
             envars = null,
             declarativeFile = OpenTelemetryBehavior(
                 fileFormat = OpenTelemetryBehavior.DEFAULT_FILE_FORMAT_VERSION,
                 loggerProvider = LoggerProviderBehavior(
-                    processor = LogRecordProcessorBehavior(http = http),
+                    processor = LogRecordProcessorBehavior(simple = SimpleLogRecordProcessorBehavior()),
                 ),
             ),
             dsl = OpenTelemetryBehavior(
@@ -65,7 +62,6 @@ internal class BehaviorResolverImplTest {
         )
 
         val processor = resolved.loggerProvider?.processor
-        assertEquals(http, processor?.http)
         assertEquals(SimpleLogRecordProcessorBehavior(), processor?.simple)
     }
 

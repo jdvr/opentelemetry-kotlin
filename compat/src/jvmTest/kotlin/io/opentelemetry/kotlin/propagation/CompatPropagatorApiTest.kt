@@ -1,9 +1,10 @@
 package io.opentelemetry.kotlin.propagation
 
 import io.opentelemetry.kotlin.ExperimentalApi
-import io.opentelemetry.kotlin.aliases.OtelJavaTextMapPropagator
+import io.opentelemetry.kotlin.config.dsl.PropagatorConfigImpl
 import io.opentelemetry.kotlin.context.Context
 import io.opentelemetry.kotlin.context.ContextKey
+import io.opentelemetry.kotlin.context.createContextKey
 import io.opentelemetry.kotlin.factory.CompatContextFactory
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -13,12 +14,12 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalApi::class)
 internal class CompatPropagatorApiTest {
 
-    private val dsl = CompatPropagatorConfigImpl()
+    private val dsl = PropagatorConfigImpl()
     private val contextFactory = CompatContextFactory()
 
     @Test
     fun `composite of zero propagators returns a working noop`() {
-        val key: ContextKey<String> = contextFactory.createKey("k")
+        val key: ContextKey<String> = createContextKey("k")
         val composite = dsl.composite()
         assertTrue(composite.fields().isEmpty())
 
@@ -61,8 +62,8 @@ internal class CompatPropagatorApiTest {
 
     @Test
     fun `composite threads context through extract delegates left-to-right`() {
-        val keyA: ContextKey<String> = contextFactory.createKey("a")
-        val keyB: ContextKey<String> = contextFactory.createKey("b")
+        val keyA: ContextKey<String> = createContextKey("a")
+        val keyB: ContextKey<String> = createContextKey("b")
         val composite = dsl.composite(
             ContextWritingPropagator(keyA, "alpha"),
             ContextWritingPropagator(keyB, "beta"),
@@ -75,17 +76,6 @@ internal class CompatPropagatorApiTest {
     }
 
     @Test
-    fun `composite unwraps adapters before delegating to Java`() {
-        val javaPropagator: OtelJavaTextMapPropagator = OtelJavaTextMapPropagator.noop()
-        val adapter = TextMapPropagatorAdapter(javaPropagator)
-
-        val composite = dsl.composite(adapter)
-
-        assertTrue(composite is TextMapPropagatorAdapter)
-        assertSame(javaPropagator, composite.impl)
-    }
-
-    @Test
     fun `w3cBaggage returns the api W3C baggage propagator`() {
         val propagator = dsl.w3cBaggage()
         assertSame(createW3CBaggagePropagator(), propagator)
@@ -93,21 +83,9 @@ internal class CompatPropagatorApiTest {
     }
 
     @Test
-    fun `composite call captures the result and buildPropagator returns it`() {
-        val captured = dsl.composite(RecordingPropagator(listOf("foo")))
-        assertSame(captured, dsl.buildPropagator())
-    }
-
-    @Test
-    fun `w3cBaggage call captures the result and buildPropagator returns it`() {
-        val captured = dsl.w3cBaggage()
-        assertSame(captured, dsl.buildPropagator())
-    }
-
-    @Test
-    fun `w3cTraceContext returns an adapter for traceparent and tracestate fields`() {
+    fun `w3cTraceContext returns the api W3C trace context propagator`() {
         val propagator = dsl.w3cTraceContext()
-        assertTrue(propagator is TextMapPropagatorAdapter)
+        assertSame(createW3CTraceContextPropagator(), propagator)
         assertEquals(listOf("traceparent", "tracestate"), propagator.fields().toList())
     }
 
@@ -126,12 +104,6 @@ internal class CompatPropagatorApiTest {
         assertEquals(incoming["traceparent"], outgoing["traceparent"])
         assertEquals(incoming["tracestate"], outgoing["tracestate"])
     }
-
-    @Test
-    fun `w3cTraceContext call captures the result and buildPropagator returns it`() {
-        val captured = dsl.w3cTraceContext()
-        assertSame(captured, dsl.buildPropagator())
-    }
 }
 
 @OptIn(ExperimentalApi::class)
@@ -143,12 +115,12 @@ private class RecordingPropagator(private val keys: List<String>) : TextMapPropa
 
     override fun fields(): Collection<String> = keys
 
-    override fun <T> inject(context: Context, carrier: T?, setter: TextMapSetter<T>) {
+    override fun <T> inject(context: Context, carrier: T, setter: TextMapSetter<T>) {
         injectCalled = true
         keys.forEach { setter.set(carrier, it, "set-by-$it") }
     }
 
-    override fun <T> extract(context: Context, carrier: T?, getter: TextMapGetter<T>): Context {
+    override fun <T> extract(context: Context, carrier: T, getter: TextMapGetter<T>): Context {
         extractCalled = true
         return context
     }
@@ -160,7 +132,7 @@ private class ContextWritingPropagator(
     private val value: String,
 ) : TextMapPropagator {
     override fun fields(): Collection<String> = emptyList()
-    override fun <T> inject(context: Context, carrier: T?, setter: TextMapSetter<T>) {}
-    override fun <T> extract(context: Context, carrier: T?, getter: TextMapGetter<T>): Context =
+    override fun <T> inject(context: Context, carrier: T, setter: TextMapSetter<T>) {}
+    override fun <T> extract(context: Context, carrier: T, getter: TextMapGetter<T>): Context =
         context.set(key, value)
 }

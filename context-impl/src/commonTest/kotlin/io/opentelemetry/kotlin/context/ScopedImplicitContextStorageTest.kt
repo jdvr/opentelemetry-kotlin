@@ -2,7 +2,6 @@ package io.opentelemetry.kotlin.context
 
 import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
-import io.opentelemetry.kotlin.factory.FakeSpanFactory
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,7 +18,7 @@ internal class ScopedImplicitContextStorageTest {
     @BeforeTest
     fun setUp() {
         handler = FakeSdkErrorHandler()
-        factory = ContextFactoryImpl(FakeSpanFactory(), handler) { rootSupplier ->
+        factory = ContextFactoryImpl(handler) { rootSupplier ->
             FakeScopedImplicitContextStorage(rootSupplier).also { storage = it }
         }
     }
@@ -28,12 +27,12 @@ internal class ScopedImplicitContextStorageTest {
     fun testAttachDelegatesToStorage() {
         val ctx = newContext()
         val scope = ctx.attach()
-        assertSame(ctx, factory.implicit())
+        assertSame(ctx, factory.current())
         assertEquals(1, storage.attachCount)
         assertEquals(0, storage.setCount)
 
         assertTrue(scope.detach())
-        assertSame(factory.root(), factory.implicit())
+        assertSame(factory.root(), factory.current())
         assertEquals(0, storage.setCount)
     }
 
@@ -65,11 +64,11 @@ internal class ScopedImplicitContextStorageTest {
 
         assertTrue(scope2.detach())
         assertTrue(scope1.detach())
-        assertSame(factory.root(), factory.implicit())
+        assertSame(factory.root(), factory.current())
     }
 
     private fun newContext(): Context =
-        factory.root().set(factory.createKey("key"), Any())
+        factory.root().set(createContextKey("key"), Any())
 
     private class FakeScopedImplicitContextStorage(
         rootSupplier: () -> Context,

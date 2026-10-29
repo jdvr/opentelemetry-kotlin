@@ -9,15 +9,13 @@ import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
 import io.opentelemetry.kotlin.export.MutableShutdownState
 import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.IdGeneratorImpl
-import io.opentelemetry.kotlin.factory.SpanFactoryImpl
 import io.opentelemetry.kotlin.factory.hexToByteArray
 import io.opentelemetry.kotlin.init.SamplerConfigImpl
 import io.opentelemetry.kotlin.resource.FakeResource
 import io.opentelemetry.kotlin.tracing.FakeTraceState
-import io.opentelemetry.kotlin.tracing.NonRecordingSpan
 import io.opentelemetry.kotlin.tracing.SpanKind
 import io.opentelemetry.kotlin.tracing.TracerImpl
-import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
+import io.opentelemetry.kotlin.tracing.createNonRecordingSpan
 import io.opentelemetry.kotlin.tracing.createSpanContext
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import io.opentelemetry.kotlin.tracing.fakeSpanLimitsConfig
@@ -31,8 +29,7 @@ internal class BuiltInSamplersTest {
 
     private val clock = FakeClock()
     private val idGenerator = IdGeneratorImpl()
-    private val spanFactory = SpanFactoryImpl()
-    private val contextFactory = ContextFactoryImpl(spanFactory)
+    private val contextFactory = ContextFactoryImpl()
     private val scope = InstrumentationScopeInfoImpl("test", null, null, emptyMap())
 
     private val samplerDsl = SamplerConfigImpl()
@@ -55,7 +52,7 @@ internal class BuiltInSamplersTest {
             isSampled = sampled
             this.isRemote = isRemote
         }
-        val parentSpan = NonRecordingSpan(createInvalidSpanContext(), parentSpanContext)
+        val parentSpan = createNonRecordingSpan(parentSpanContext)
         return contextFactory.root().storeSpan(parentSpan)
     }
 

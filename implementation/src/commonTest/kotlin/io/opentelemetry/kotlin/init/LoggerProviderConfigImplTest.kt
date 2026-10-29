@@ -2,7 +2,9 @@ package io.opentelemetry.kotlin.init
 
 import io.opentelemetry.kotlin.attributes.DEFAULT_ATTRIBUTE_LIMIT
 import io.opentelemetry.kotlin.behavior.ConsoleExporterBehavior
+import io.opentelemetry.kotlin.behavior.LogRecordExporterBehavior
 import io.opentelemetry.kotlin.behavior.LogRecordProcessorBehavior
+import io.opentelemetry.kotlin.behavior.SimpleLogRecordProcessorBehavior
 import io.opentelemetry.kotlin.clock.FakeClock
 import io.opentelemetry.kotlin.error.FakeSdkErrorHandler
 import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
@@ -28,7 +30,7 @@ import kotlin.test.assertSame
 internal class LoggerProviderConfigImplTest {
 
     private val clock = FakeClock()
-    private val base = ResourceFactoryImpl().sdkDefaultResource(SdkMode.REGULAR)
+    private val base = ResourceFactoryImpl(NoopSdkErrorHandler).sdkDefaultResource(SdkMode.REGULAR)
 
     @Test
     fun testDefaultLoggingConfig() {
@@ -39,22 +41,17 @@ internal class LoggerProviderConfigImplTest {
     }
 
     @Test
-    fun testConsoleBehaviorInstallsProcessor() {
-        val cfg = LoggerProviderConfigImpl(clock, NoopSdkErrorHandler).generateLoggingConfig(
-            base,
-            LogRecordProcessorBehavior(console = ConsoleExporterBehavior()),
-        )
-        assertNotNull(cfg.processor)
-    }
-
-    @Test
     fun testDslExportTakesPrecedenceOverConsoleBehavior() {
         val dslProcessor = FakeLogRecordProcessor()
         val cfg = LoggerProviderConfigImpl(clock, NoopSdkErrorHandler).apply {
             export { dslProcessor }
         }.generateLoggingConfig(
             base,
-            LogRecordProcessorBehavior(console = ConsoleExporterBehavior()),
+            LogRecordProcessorBehavior(
+                simple = SimpleLogRecordProcessorBehavior(
+                    exporter = LogRecordExporterBehavior(console = ConsoleExporterBehavior())
+                )
+            ),
         )
         assertSame(dslProcessor, cfg.processor)
     }
